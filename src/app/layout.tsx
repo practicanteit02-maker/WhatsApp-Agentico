@@ -3,7 +3,8 @@ import localFont from "next/font/local";
 import { QueryProvider } from "@/components/query-provider";
 import "./globals.css";
 
-// My Space 1A design system — Inter Display is the sole typeface.
+export const dynamic = "force-dynamic";
+
 const interDisplay = localFont({
   src: [
     { path: "./fonts/InterDisplay-Regular.ttf", weight: "400", style: "normal" },
