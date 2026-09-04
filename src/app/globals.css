@@ -1,0 +1,339 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter-display), "Inter", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root,
+:root[data-theme="default"][data-mode="light"] {
+  /* Sistema de diseño My Space 1A — Inter Display, inputs de 12px / botones
+     y tarjetas de 14px / pills de 50px (a pedido del usuario: "que todas las
+     esquinas se vean redondeadas" — antes eran 6/8px, más rectas). El acento
+     de marca es el rojo rgb(199,30,43) usado en toda la paleta del chat (ver
+     el bloque oscuro más abajo en este mismo archivo para los valores
+     pareados del tema oscuro) — el modo claro usa el mismo tono de acento,
+     solo que adaptado para superficies claras (tintes pálidos en vez de los
+     tonos oscuros que usa el modo oscuro). Es un rojo intencionalmente
+     distinto (más oscuro/profundo) del rojo de --destructive, para que un
+     botón de marca nunca se confunda visualmente con un estado de error. */
+  --radius: 14px;
+  --background: rgb(247, 247, 248);
+  --foreground: rgb(23, 23, 23);
+  --card: rgb(255, 255, 255);
+  --card-foreground: rgb(23, 23, 23);
+  --popover: rgb(255, 255, 255);
+  --popover-foreground: rgb(23, 23, 23);
+  --primary: rgb(199, 30, 43);
+  --primary-foreground: rgb(255, 255, 255);
+  --secondary: rgb(241, 241, 243);
+  --secondary-foreground: rgb(23, 23, 23);
+  --muted: rgb(241, 241, 243);
+  --muted-foreground: rgb(91, 89, 87);
+  --accent: rgb(241, 241, 243);
+  --accent-foreground: rgb(23, 23, 23);
+  --destructive: rgb(247, 34, 34);
+  --destructive-foreground: rgb(255, 255, 255);
+  --warning: hsl(38 92% 50%);
+  --warning-foreground: hsl(30 80% 15%);
+  --success: rgb(34, 160, 107);
+  --success-foreground: rgb(255, 255, 255);
+  --border: rgb(229, 229, 229);
+  --input: rgb(229, 229, 229);
+  --ring: rgb(111, 0, 255);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: rgb(255, 255, 255);
+  --sidebar-foreground: rgb(23, 23, 23);
+  --sidebar-primary: rgb(199, 30, 43);
+  --sidebar-primary-foreground: rgb(255, 255, 255);
+  --sidebar-accent: rgb(241, 241, 243);
+  --sidebar-accent-foreground: rgb(23, 23, 23);
+  --sidebar-border: rgb(229, 229, 229);
+  --sidebar-ring: rgb(111, 0, 255);
+  --whatsapp-green: rgb(199, 30, 43);
+  --whatsapp-bubble-incoming: rgb(255, 255, 255);
+  --whatsapp-bubble-outgoing: rgba(199, 30, 43, 0.08);
+  --primary-hover: rgb(163, 22, 33);
+  --chat-surface: rgb(255, 255, 255);
+  --chat-toolbar: rgb(247, 247, 248);
+  --chat-canvas: rgb(250, 234, 234);
+  --chat-canvas-pattern: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22340%22%20height%3D%22340%22%20viewBox%3D%220%200%20340%20340%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22rgba(0%2C0%2C0%2C0.07)%22%20stroke-width%3D%221.4%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cg%20transform%3D%22translate(30.1%2C33.1)%20rotate(-19%2C12%2C12)%20scale(0.90)%22%3E%3Crect%20x%3D%223%22%20y%3D%224%22%20width%3D%2218%22%20height%3D%2212%22%20rx%3D%223%22%2F%3E%3Cpolyline%20points%3D%227%2C16%207%2C20%2011%2C16%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(113.1%2C30.8)%20rotate(-21%2C12%2C12)%20scale(1.28)%22%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%223%22%2F%3E%3Ccircle%20cx%3D%2215.5%22%20cy%3D%228.5%22%20r%3D%223%22%2F%3E%3Cpolyline%20points%3D%225.5%2C10.5%2012%2C19%2018.5%2C10.5%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(204.3%2C26.7)%20rotate(-11%2C12%2C12)%20scale(1.22)%22%3E%3Cpolygon%20points%3D%2212%2C2%2014%2C10%2022%2C12%2014%2C14%2012%2C22%2010%2C14%202%2C12%2010%2C10%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(292.2%2C12.5)%20rotate(0%2C12%2C12)%20scale(0.89)%22%3E%3Crect%20x%3D%223%22%20y%3D%226%22%20width%3D%2218%22%20height%3D%2212%22%20rx%3D%222%22%2F%3E%3Cpolyline%20points%3D%223%2C7%2012%2C14%2021%2C7%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(37.8%2C101.0)%20rotate(3%2C12%2C12)%20scale(1.04)%22%3E%3Crect%20x%3D%228%22%20y%3D%222%22%20width%3D%228%22%20height%3D%2220%22%20rx%3D%222%22%2F%3E%3Cline%20x1%3D%2211%22%20y1%3D%2218%22%20x2%3D%2213%22%20y2%3D%2218%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(101.7%2C96.4)%20rotate(22%2C12%2C12)%20scale(1.33)%22%3E%3Crect%20x%3D%223%22%20y%3D%227%22%20width%3D%2218%22%20height%3D%2213%22%20rx%3D%222%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2213.5%22%20r%3D%224%22%2F%3E%3Crect%20x%3D%229%22%20y%3D%224%22%20width%3D%226%22%20height%3D%223%22%20rx%3D%221%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(184.4%2C113.1)%20rotate(23%2C12%2C12)%20scale(0.86)%22%3E%3Ccircle%20cx%3D%227%22%20cy%3D%2218%22%20r%3D%223%22%2F%3E%3Cline%20x1%3D%2210%22%20y1%3D%2218%22%20x2%3D%2210%22%20y2%3D%224%22%2F%3E%3Cpolyline%20points%3D%2210%2C4%2017%2C6%2017%2C10%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(282.1%2C117.6)%20rotate(9%2C12%2C12)%20scale(0.92)%22%3E%3Cpolygon%20points%3D%222%2C12%2022%2C3%2013%2C22%2011%2C13%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(16.5%2C221.1)%20rotate(-3%2C12%2C12)%20scale(0.89)%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22%2F%3E%3Cpolyline%20points%3D%228%2C12%2011%2C15%2016%2C9%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(117.5%2C193.3)%20rotate(-17%2C12%2C12)%20scale(1.21)%22%3E%3Ccircle%20cx%3D%227%22%20cy%3D%2214%22%20r%3D%223%22%2F%3E%3Ccircle%20cx%3D%2211%22%20cy%3D%2211%22%20r%3D%224%22%2F%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2213%22%20r%3D%223.5%22%2F%3E%3Crect%20x%3D%226%22%20y%3D%2214%22%20width%3D%2212%22%20height%3D%224%22%20rx%3D%222%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(194.2%2C194.1)%20rotate(-21%2C12%2C12)%20scale(1.31)%22%3E%3Crect%20x%3D%223%22%20y%3D%224%22%20width%3D%2218%22%20height%3D%2212%22%20rx%3D%223%22%2F%3E%3Cpolyline%20points%3D%227%2C16%207%2C20%2011%2C16%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(274.4%2C216.8)%20rotate(-1%2C12%2C12)%20scale(0.89)%22%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%223%22%2F%3E%3Ccircle%20cx%3D%2215.5%22%20cy%3D%228.5%22%20r%3D%223%22%2F%3E%3Cpolyline%20points%3D%225.5%2C10.5%2012%2C19%2018.5%2C10.5%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(34.9%2C281.3)%20rotate(13%2C12%2C12)%20scale(1.14)%22%3E%3Cpolygon%20points%3D%2212%2C2%2014%2C10%2022%2C12%2014%2C14%2012%2C22%2010%2C14%202%2C12%2010%2C10%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(100.0%2C273.8)%20rotate(-2%2C12%2C12)%20scale(0.80)%22%3E%3Crect%20x%3D%223%22%20y%3D%226%22%20width%3D%2218%22%20height%3D%2212%22%20rx%3D%222%22%2F%3E%3Cpolyline%20points%3D%223%2C7%2012%2C14%2021%2C7%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(181.3%2C281.8)%20rotate(9%2C12%2C12)%20scale(1.14)%22%3E%3Crect%20x%3D%228%22%20y%3D%222%22%20width%3D%228%22%20height%3D%2220%22%20rx%3D%222%22%2F%3E%3Cline%20x1%3D%2211%22%20y1%3D%2218%22%20x2%3D%2213%22%20y2%3D%2218%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(304.8%2C278.1)%20rotate(-3%2C12%2C12)%20scale(1.05)%22%3E%3Crect%20x%3D%223%22%20y%3D%227%22%20width%3D%2218%22%20height%3D%2213%22%20rx%3D%222%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2213.5%22%20r%3D%224%22%2F%3E%3Crect%20x%3D%229%22%20y%3D%224%22%20width%3D%226%22%20height%3D%223%22%20rx%3D%221%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E");
+  --chat-border: rgb(229, 229, 229);
+  --chat-border-strong: rgb(220, 220, 220);
+  --chat-hover: rgb(241, 241, 243);
+  --chat-icon-hover: rgb(220, 220, 220 / 55%);
+  --chat-input: rgb(255, 255, 255);
+  --chat-bubble-incoming: rgb(248, 250, 254);
+  /* El mismo rojo vívido que la burbuja saliente del modo oscuro (no un
+     tinte pastel) — ver .chat-bubble-on-accent más abajo para el texto
+     blanco-sobre-rojo que va con esto. */
+  --chat-bubble-outgoing: rgb(199, 30, 43);
+  /* El header tiene su propio blanco con tinte rojo sutil en vez de
+     reutilizar directamente el color de la burbuja — la misma separación
+     header/burbuja que usa el modo oscuro, solo que adaptada a claro: un
+     tinte apenas perceptible en vez de uno totalmente saturado. */
+  --chat-header: rgb(253, 244, 244);
+  --chat-avatar: rgb(252, 224, 224);
+  --chat-avatar-foreground: rgb(163, 22, 33);
+  --chat-check: var(--muted-foreground);
+  --chat-check-read: #53bdeb;
+  --chat-presence: rgb(34, 160, 107);
+  --chat-warning-background: hsl(38 92% 50% / 14%);
+  --chat-warning-border: hsl(38 92% 50% / 35%);
+  --chat-warning-foreground: hsl(30 80% 25%);
+  --chat-media-outline: rgb(0 0 0 / 10%);
+}
+
+:root[data-theme="default"][data-mode="dark"],
+:root[data-theme="kapso"] {
+  --background: rgb(17, 17, 18);
+  --foreground: rgb(245, 245, 245);
+  --card: rgb(27, 27, 27);
+  --card-foreground: rgb(245, 245, 245);
+  --popover: rgb(27, 27, 27);
+  --popover-foreground: rgb(245, 245, 245);
+  /* Acento rojo, igual que la paleta oscura del chat más abajo
+     (--chat-bubble-outgoing, etc.) y que el modo claro — el mismo tono de
+     marca en ambos temas, pedido por el jefe del proyecto. */
+  --primary: rgb(199, 30, 43);
+  --primary-foreground: rgb(255, 255, 255);
+  --secondary: rgb(34, 34, 34);
+  --secondary-foreground: rgb(245, 245, 245);
+  --muted: rgb(34, 34, 34);
+  --muted-foreground: rgb(164, 164, 164);
+  --accent: rgb(42, 42, 42);
+  --accent-foreground: rgb(245, 245, 245);
+  --destructive: rgb(247, 34, 34);
+  --destructive-foreground: rgb(255, 255, 255);
+  --warning: hsl(38 92% 55%);
+  --warning-foreground: hsl(30 80% 12%);
+  --success: rgb(34, 160, 107);
+  --success-foreground: rgb(255, 255, 255);
+  --border: rgb(55, 55, 55);
+  --input: rgb(55, 55, 55);
+  --ring: rgb(111, 0, 255);
+  --sidebar: rgb(27, 27, 27);
+  --sidebar-foreground: rgb(245, 245, 245);
+  --sidebar-primary: rgb(199, 30, 43);
+  --sidebar-primary-foreground: rgb(255, 255, 255);
+  --sidebar-accent: rgb(34, 34, 34);
+  --sidebar-accent-foreground: rgb(245, 245, 245);
+  --sidebar-border: rgb(55, 55, 55);
+  --sidebar-ring: rgb(111, 0, 255);
+  --whatsapp-green: rgb(199, 30, 43);
+  --primary-hover: rgb(163, 22, 33);
+  --chat-surface: rgb(30, 20, 21);
+  --chat-toolbar: rgb(30, 20, 21);
+  --chat-canvas: rgb(23, 15, 16);
+  --chat-canvas-pattern: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22340%22%20height%3D%22340%22%20viewBox%3D%220%200%20340%20340%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22rgba(255%2C255%2C255%2C0.10)%22%20stroke-width%3D%221.4%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cg%20transform%3D%22translate(30.1%2C33.1)%20rotate(-19%2C12%2C12)%20scale(0.90)%22%3E%3Crect%20x%3D%223%22%20y%3D%224%22%20width%3D%2218%22%20height%3D%2212%22%20rx%3D%223%22%2F%3E%3Cpolyline%20points%3D%227%2C16%207%2C20%2011%2C16%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(113.1%2C30.8)%20rotate(-21%2C12%2C12)%20scale(1.28)%22%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%223%22%2F%3E%3Ccircle%20cx%3D%2215.5%22%20cy%3D%228.5%22%20r%3D%223%22%2F%3E%3Cpolyline%20points%3D%225.5%2C10.5%2012%2C19%2018.5%2C10.5%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(204.3%2C26.7)%20rotate(-11%2C12%2C12)%20scale(1.22)%22%3E%3Cpolygon%20points%3D%2212%2C2%2014%2C10%2022%2C12%2014%2C14%2012%2C22%2010%2C14%202%2C12%2010%2C10%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(292.2%2C12.5)%20rotate(0%2C12%2C12)%20scale(0.89)%22%3E%3Crect%20x%3D%223%22%20y%3D%226%22%20width%3D%2218%22%20height%3D%2212%22%20rx%3D%222%22%2F%3E%3Cpolyline%20points%3D%223%2C7%2012%2C14%2021%2C7%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(37.8%2C101.0)%20rotate(3%2C12%2C12)%20scale(1.04)%22%3E%3Crect%20x%3D%228%22%20y%3D%222%22%20width%3D%228%22%20height%3D%2220%22%20rx%3D%222%22%2F%3E%3Cline%20x1%3D%2211%22%20y1%3D%2218%22%20x2%3D%2213%22%20y2%3D%2218%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(101.7%2C96.4)%20rotate(22%2C12%2C12)%20scale(1.33)%22%3E%3Crect%20x%3D%223%22%20y%3D%227%22%20width%3D%2218%22%20height%3D%2213%22%20rx%3D%222%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2213.5%22%20r%3D%224%22%2F%3E%3Crect%20x%3D%229%22%20y%3D%224%22%20width%3D%226%22%20height%3D%223%22%20rx%3D%221%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(184.4%2C113.1)%20rotate(23%2C12%2C12)%20scale(0.86)%22%3E%3Ccircle%20cx%3D%227%22%20cy%3D%2218%22%20r%3D%223%22%2F%3E%3Cline%20x1%3D%2210%22%20y1%3D%2218%22%20x2%3D%2210%22%20y2%3D%224%22%2F%3E%3Cpolyline%20points%3D%2210%2C4%2017%2C6%2017%2C10%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(282.1%2C117.6)%20rotate(9%2C12%2C12)%20scale(0.92)%22%3E%3Cpolygon%20points%3D%222%2C12%2022%2C3%2013%2C22%2011%2C13%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(16.5%2C221.1)%20rotate(-3%2C12%2C12)%20scale(0.89)%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22%2F%3E%3Cpolyline%20points%3D%228%2C12%2011%2C15%2016%2C9%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(117.5%2C193.3)%20rotate(-17%2C12%2C12)%20scale(1.21)%22%3E%3Ccircle%20cx%3D%227%22%20cy%3D%2214%22%20r%3D%223%22%2F%3E%3Ccircle%20cx%3D%2211%22%20cy%3D%2211%22%20r%3D%224%22%2F%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2213%22%20r%3D%223.5%22%2F%3E%3Crect%20x%3D%226%22%20y%3D%2214%22%20width%3D%2212%22%20height%3D%224%22%20rx%3D%222%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(194.2%2C194.1)%20rotate(-21%2C12%2C12)%20scale(1.31)%22%3E%3Crect%20x%3D%223%22%20y%3D%224%22%20width%3D%2218%22%20height%3D%2212%22%20rx%3D%223%22%2F%3E%3Cpolyline%20points%3D%227%2C16%207%2C20%2011%2C16%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(274.4%2C216.8)%20rotate(-1%2C12%2C12)%20scale(0.89)%22%3E%3Ccircle%20cx%3D%228.5%22%20cy%3D%228.5%22%20r%3D%223%22%2F%3E%3Ccircle%20cx%3D%2215.5%22%20cy%3D%228.5%22%20r%3D%223%22%2F%3E%3Cpolyline%20points%3D%225.5%2C10.5%2012%2C19%2018.5%2C10.5%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(34.9%2C281.3)%20rotate(13%2C12%2C12)%20scale(1.14)%22%3E%3Cpolygon%20points%3D%2212%2C2%2014%2C10%2022%2C12%2014%2C14%2012%2C22%2010%2C14%202%2C12%2010%2C10%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(100.0%2C273.8)%20rotate(-2%2C12%2C12)%20scale(0.80)%22%3E%3Crect%20x%3D%223%22%20y%3D%226%22%20width%3D%2218%22%20height%3D%2212%22%20rx%3D%222%22%2F%3E%3Cpolyline%20points%3D%223%2C7%2012%2C14%2021%2C7%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(181.3%2C281.8)%20rotate(9%2C12%2C12)%20scale(1.14)%22%3E%3Crect%20x%3D%228%22%20y%3D%222%22%20width%3D%228%22%20height%3D%2220%22%20rx%3D%222%22%2F%3E%3Cline%20x1%3D%2211%22%20y1%3D%2218%22%20x2%3D%2213%22%20y2%3D%2218%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(304.8%2C278.1)%20rotate(-3%2C12%2C12)%20scale(1.05)%22%3E%3Crect%20x%3D%223%22%20y%3D%227%22%20width%3D%2218%22%20height%3D%2213%22%20rx%3D%222%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2213.5%22%20r%3D%224%22%2F%3E%3Crect%20x%3D%229%22%20y%3D%224%22%20width%3D%226%22%20height%3D%223%22%20rx%3D%221%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E");
+  /* Paleta oscura del chat con acento rojo de marca (header/canvas con tinte
+     oscuro cálido, burbujas entrantes gris cálido, burbujas salientes
+     rojas, estado "en línea" verde) — ver el bloque oscuro de
+     .chat-header-on-brand más abajo para los overrides de texto/ícono
+     pareados del header. El header tiene su propio tono oscuro en vez de
+     reutilizar --chat-bubble-outgoing, para mantener esa misma separación
+     header/burbuja del tema anterior. */
+  --chat-border: rgb(56, 40, 42);
+  --chat-border-strong: rgb(72, 52, 55);
+  --chat-hover: rgb(42, 28, 30);
+  --chat-icon-hover: rgb(72, 52, 55 / 80%);
+  --chat-input: rgb(38, 26, 27);
+  --chat-bubble-incoming: rgb(63, 46, 48);
+  --chat-bubble-outgoing: rgb(199, 30, 43);
+  --chat-header: rgb(28, 17, 18);
+  --chat-avatar: rgb(84, 42, 46);
+  --chat-avatar-foreground: rgb(255, 158, 158);
+  --chat-check: var(--muted-foreground);
+  --chat-check-read: #53bdeb;
+  --chat-presence: rgb(52, 211, 153);
+  --chat-warning-background: hsl(38 92% 55% / 14%);
+  --chat-warning-border: hsl(38 92% 55% / 35%);
+  --chat-warning-foreground: hsl(38 92% 75%);
+  --chat-media-outline: hsl(0 0% 100% / 10%);
+}
+
+/* Las barras de header (la barra superior, no el compositor) tienen su
+   propio fondo --chat-header (ver los dos bloques de tema arriba). Estos
+   overrides hacen que los utilities de texto/ícono/borde anidados adentro
+   — título, botones, buscador, pills de estado — se lean con claridad
+   sobre ese color, sin tocar cada elemento individualmente. Los menús
+   desplegables que salen de un header (bg-popover) no se ven afectados a
+   propósito, para que se mantengan neutrales/legibles de todas formas.
+   Separado por tema porque la luminancia del header difiere: un tinte casi
+   blanco en modo claro (necesita texto oscuro) vs un navy oscuro en modo
+   oscuro (necesita texto claro) — ambos usan el mismo acento azul --primary
+   de cualquier forma. */
+:root,
+:root[data-theme="default"][data-mode="light"] {
+  .chat-header-on-brand {
+    --foreground: rgb(23, 23, 23);
+    --muted-foreground: rgb(91, 89, 87);
+    --primary: rgb(199, 30, 43);
+    --primary-foreground: rgb(255, 255, 255);
+    --border: rgb(0 0 0 / 12%);
+    --chat-hover: rgb(0 0 0 / 6%);
+    --chat-icon-hover: rgb(0 0 0 / 8%);
+    --chat-border-strong: rgb(0 0 0 / 12%);
+    --chat-presence: rgb(34, 160, 107);
+  }
+}
+
+:root[data-theme="default"][data-mode="dark"],
+:root[data-theme="kapso"] {
+  .chat-header-on-brand {
+    /* El header ahora tiene un tono oscuro cálido cercano en luminancia al
+       resto del tema oscuro, así que el texto solo necesita el contraste
+       claro-sobre-oscuro normal de la app en vez de un tratamiento forzado a
+       blanco puro.
+       NOTA: --primary debe quedarse explícito aquí aunque ahora sea el mismo
+       rojo que el --primary oscuro de toda la app — el bloque de override
+       de modo claro de arriba coincide por error con `:root` sin condición
+       (no solo con su variante `[data-mode="light"]`), así que sin un
+       override de especificidad igual o mayor aquí, el modo oscuro heredaría
+       en silencio cualquier valor de --primary que el bloque de modo claro
+       tuviera dentro de .chat-header-on-brand. Es una rareza preexistente,
+       no vale la pena reestructurar el selector por ahora. */
+    --foreground: rgb(245, 245, 245);
+    --muted-foreground: rgb(255 255 255 / 72%);
+    --primary: rgb(199, 30, 43);
+    --primary-foreground: rgb(255, 255, 255);
+    --border: rgb(255 255 255 / 12%);
+    --chat-hover: rgb(255 255 255 / 8%);
+    --chat-icon-hover: rgb(255 255 255 / 10%);
+    --chat-border-strong: rgb(255 255 255 / 14%);
+    --chat-presence: rgb(52, 211, 153);
+  }
+}
+
+/* La burbuja de mensaje saliente (ver message-view.tsx) ahora se apoya en
+   el mismo azul vívido --chat-bubble-outgoing en ambos temas. El
+   --foreground/--muted-foreground claro-sobre-oscuro normal del modo oscuro
+   ya se lee bien sobre ese azul, pero los del modo claro son oscuro-sobre-
+   claro — sin esto, el texto y las horas de la burbuja serían casi
+   ilegibles, gris oscuro sobre azul. Se declara explícitamente en ambos
+   bloques (no se deja caer por herencia) por la misma razón documentada en
+   .chat-header-on-brand arriba: el selector `:root` sin condición del
+   bloque claro se colaría también al modo oscuro. */
+:root,
+:root[data-theme="default"][data-mode="light"] {
+  .chat-bubble-on-accent {
+    --foreground: rgb(255, 255, 255);
+    --muted-foreground: rgb(255 255 255 / 78%);
+  }
+}
+
+:root[data-theme="default"][data-mode="dark"],
+:root[data-theme="kapso"] {
+  .chat-bubble-on-accent {
+    --foreground: rgb(245, 245, 245);
+    --muted-foreground: rgb(164, 164, 164);
+  }
+}
+
+.chat-canvas-doodle {
+  background-color: var(--chat-canvas);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+  }
+
+  html,
+  body {
+    min-width: 320px;
+    overflow: hidden;
+    transition: background-color 160ms ease, color 160ms ease;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    touch-action: manipulation;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Márgenes de área segura para teléfonos con notch (iPhone X+) */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* Arregla que el layout de tabla de ScrollArea rompa el truncado de texto */
+[data-radix-scroll-area-viewport] > div {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
