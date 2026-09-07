@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ConversationList } from '@/components/conversation-list';
-import { MOCK_ACCOUNT_PROFILES } from '@/lib/mock-profiles';
 import { MessageView } from '@/components/message-view';
 import {
   CONVERSATIONS_QUERY_KEY,
@@ -12,8 +12,6 @@ import {
   groupConversationsByPhoneNumber,
 } from '@/lib/inbox-data';
 import { loadStarredMessages, toggleStarredMessage, type StarredMessage } from '@/lib/starred-messages';
-
-const ACTIVE_PROFILE_STORAGE_KEY = 'whatsapp-cloud-inbox-active-profile';
 
 export default function Home() {
   const [selectedThreadKey, setSelectedThreadKey] = useState<string>();
@@ -27,36 +25,16 @@ export default function Home() {
   // próxima vez que MessageView termine de cargar, cuando se abre un chat
   // desde el panel de destacados haciendo clic en un mensaje puntual.
   const [jumpToMessageId, setJumpToMessageId] = useState<string>();
-  // Funcionalidad "Perfil": vive aquí (y no solo en ConversationList) porque
-  // MessageView también lo necesita, para mostrar el nombre del "remitente"
-  // en los mensajes que se envían — ver activeSenderName en message-view.tsx
-  // y el menú de perfiles en conversation-list.tsx. Se persiste en
-  // localStorage (a diferencia de antes, que siempre arrancaba en
-  // MOCK_ACCOUNT_PROFILES[0]) porque desde la funcionalidad "Candado de
-  // chat" esto pasó a ser una identidad real de verdad que tiene que
-  // sobrevivir a un refresh — si se reseteara solo, dos pestañas de la
-  // misma persona podrían terminar "peleándose" el mismo chat entre ellas.
-  const [activeMockProfile, setActiveMockProfileState] = useState<string>(MOCK_ACCOUNT_PROFILES[0]);
-
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(ACTIVE_PROFILE_STORAGE_KEY);
-      if (stored && (MOCK_ACCOUNT_PROFILES as readonly string[]).includes(stored)) {
-        setActiveMockProfileState(stored);
-      }
-    } catch {
-      // Sin localStorage disponible: se sigue con el perfil por defecto.
-    }
-  }, []);
-
-  const setActiveMockProfile = (profile: string) => {
-    setActiveMockProfileState(profile);
-    try {
-      window.localStorage.setItem(ACTIVE_PROFILE_STORAGE_KEY, profile);
-    } catch {
-      // Se queda solo en memoria para esta sesión si no se puede persistir.
-    }
-  };
+  // Perfil y zona reales de la persona logueada (tabla "usuarios-panel" de
+  // DynamoDB, ver src/auth.ts) — se leen de la sesión de NextAuth, no de un
+  // selector manual. Viven aquí (y no solo en ConversationList) porque
+  // MessageView también necesita el perfil, para mostrar el nombre del
+  // "remitente" en los mensajes que se envían (ver activeSenderName más
+  // abajo). "Sin asignar" es el valor mientras la sesión todavía está
+  // cargando, o si el correo no está en esa tabla.
+  const { data: session } = useSession();
+  const sessionPerfil = session?.user?.perfil ?? 'Sin asignar';
+  const sessionZona = session?.user?.zona ?? 'Sin asignar';
   // Funcionalidad "Nuevo chat": número recién ingresado en NewChatDialog,
   // todavía sin ninguna conversación real (ver handleOpenNewChat) — mientras
   // esto esté puesto, MessageView se abre con este número como destinatario
@@ -141,8 +119,8 @@ export default function Home() {
         isHidden={!!selectedThread}
         starredMessages={starredMessages}
         onOpenStarredMessage={handleOpenStarredMessage}
-        activeMockProfile={activeMockProfile}
-        onChangeActiveMockProfile={setActiveMockProfile}
+        sessionPerfil={sessionPerfil}
+        sessionZona={sessionZona}
         onOpenNewChat={handleOpenNewChat}
       />
       <div className="relative flex min-h-0 min-w-0 flex-1 md:overflow-hidden md:rounded-2xl md:border md:border-[var(--chat-border-strong)]">
@@ -165,7 +143,7 @@ export default function Home() {
           }}
           jumpToMessageId={jumpToMessageId}
           onJumpToMessageHandled={() => setJumpToMessageId(undefined)}
-          activeSenderName={activeMockProfile}
+          activeSenderName={sessionPerfil}
         />
       </div>
     </div>

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { format, isToday, isValid, isYesterday } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { signOut } from 'next-auth/react';
-import { Archive, ArchiveRestore, ArrowLeft, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, Search, Settings, Square, SquarePen, Star, User, UserCog, Video, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowLeft, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, Search, Settings, Square, SquarePen, Star, TriangleAlert, User, UserCog, Video, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useInboxLiveUpdates } from '@/hooks/use-inbox-live-updates';
 import { playReceivedMessageSound, playSentMessageSound } from '@/lib/notification-sounds';
@@ -29,7 +29,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { NewChatDialog } from '@/components/new-chat-dialog';
 import { type StarredMessage } from '@/lib/starred-messages';
-import { MOCK_ACCOUNT_PROFILES } from '@/lib/mock-profiles';
+import { getProfileStyle } from '@/lib/mock-profiles';
 import { getMockZoneForThreadKey, MOCK_ZONE_OPTIONS } from '@/lib/mock-zones';
 
 // Funcionalidad "Vista previa de media": en vez del texto feo que genera
@@ -225,12 +225,15 @@ type Props = {
   /** Clic en un mensaje del panel de destacados — abre ese chat y le pide a
    * MessageView que salte hasta ese mensaje puntual. */
   onOpenStarredMessage?: (thread: ConversationThread, messageId: string) => void;
-  /** Funcionalidad "Perfil": cuál de los MOCK_ACCOUNT_PROFILES está activo
-   * ahorita — vive en src/app/page.tsx (no acá) porque MessageView también
-   * lo necesita, para mostrar el nombre del "remitente" en los mensajes que
-   * se envían (ver activeSenderName en message-view.tsx). */
-  activeMockProfile?: string;
-  onChangeActiveMockProfile?: (profile: string) => void;
+  /** Perfil y zona reales de la persona logueada, asignados desde la tabla
+   * "usuarios-panel" de DynamoDB (ver src/auth.ts) — de solo lectura, nadie
+   * los cambia desde acá. Viven en src/app/page.tsx (no acá) porque
+   * MessageView también necesita el perfil, para mostrar el nombre del
+   * "remitente" en los mensajes que se envían (ver activeSenderName en
+   * message-view.tsx). "Sin asignar" es el valor cuando el correo de la
+   * persona todavía no está cargado en esa tabla. */
+  sessionPerfil?: string;
+  sessionZona?: string;
   /** Funcionalidad "Nuevo chat": se dispara al validar el número en
    * NewChatDialog — abre la vista de chat con ese número (ver
    * pendingNewChatRecipient en src/app/page.tsx). */
@@ -245,8 +248,8 @@ export function ConversationList({
   isHidden = false,
   starredMessages = EMPTY_STARRED_MESSAGES,
   onOpenStarredMessage,
-  activeMockProfile = MOCK_ACCOUNT_PROFILES[0],
-  onChangeActiveMockProfile,
+  sessionPerfil = 'Sin asignar',
+  sessionZona = 'Sin asignar',
   onOpenNewChat,
 }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -1068,44 +1071,45 @@ export function ConversationList({
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-foreground">Usuario</p>
-                      <p className="truncate text-xs text-muted-foreground">Perfil: {activeMockProfile}</p>
                     </div>
                   </div>
 
                   <div className="my-1 h-px bg-[var(--chat-border-strong)]" />
 
-                  {/* Funcionalidad "Perfil": estos "perfiles" (Administrador,
-                      Secretaria, etc.) son solo un adelanto visual de los
-                      roles que vendrán con el login real — elegir uno acá
-                      solo cambia cuál se ve marcado, no hace nada más
-                      todavía (no hay sesión ni permisos reales que cambiar). */}
+                  {/* Perfil y zona reales, asignados desde la tabla
+                      "usuarios-panel" de DynamoDB (ver src/auth.ts) — solo
+                      lectura, ya no hay selector: nadie elige su propio
+                      perfil o zona desde acá. "Sin asignar" (el correo
+                      todavía no está cargado en esa tabla) se marca en
+                      amarillo para que se note que a esa persona le falta
+                      asignación. */}
                   <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Perfiles
+                    Perfil y zona
                   </p>
-                  {MOCK_ACCOUNT_PROFILES.map((role) => {
-                    const isActive = role === activeMockProfile;
-
-                    return (
-                      <button
-                        key={role}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={isActive}
-                        onClick={() => {
-                          onChangeActiveMockProfile?.(role);
-                          setIsProfileMenuOpen(false);
-                        }}
-                        className={cn(
-                          "flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-xs font-medium hover:bg-[var(--chat-hover)]",
-                          isActive ? "text-foreground" : "text-muted-foreground",
-                        )}
-                      >
-                        <UserCog className="size-3.5" />
-                        <span className="flex-1 truncate">{role}</span>
-                        {isActive && <Check className="size-3.5 text-primary" />}
-                      </button>
-                    );
-                  })}
+                  <div className="flex flex-col gap-1 px-2 pb-2">
+                    {sessionPerfil === 'Sin asignar' ? (
+                      <span className="flex items-center gap-2 rounded-lg border border-[var(--chat-warning-border)] bg-[var(--chat-warning-background)] px-2 py-1.5 text-xs font-medium text-[var(--chat-warning-foreground)]">
+                        <TriangleAlert className="size-3.5 flex-shrink-0" />
+                        Perfil sin asignar
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2 px-2 py-1 text-xs font-medium text-foreground">
+                        <UserCog className="size-3.5 flex-shrink-0" style={{ color: getProfileStyle(sessionPerfil).color }} />
+                        {sessionPerfil}
+                      </span>
+                    )}
+                    {sessionZona === 'Sin asignar' ? (
+                      <span className="flex items-center gap-2 rounded-lg border border-[var(--chat-warning-border)] bg-[var(--chat-warning-background)] px-2 py-1.5 text-xs font-medium text-[var(--chat-warning-foreground)]">
+                        <TriangleAlert className="size-3.5 flex-shrink-0" />
+                        Zona sin asignar
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground">
+                        <MapPin className="size-3.5 flex-shrink-0" />
+                        {sessionZona}
+                      </span>
+                    )}
+                  </div>
 
                   <div className="my-1 h-px bg-[var(--chat-border-strong)]" />
 

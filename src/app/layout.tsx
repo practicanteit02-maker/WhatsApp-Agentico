@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { SessionProvider } from "next-auth/react";
 import { QueryProvider } from "@/components/query-provider";
 import "./globals.css";
 
@@ -70,7 +71,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning className={interDisplay.variable}>
       <body className="antialiased">
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        <QueryProvider>{children}</QueryProvider>
+        <SessionProvider>
+          <QueryProvider>{children}</QueryProvider>
+        </SessionProvider>
       </body>
     </html>
   );
