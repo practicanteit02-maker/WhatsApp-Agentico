@@ -56,7 +56,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         url: `${domain}/oauth2/authorize`,
         params: { scope: "openid email profile" },
       },
-      token: `${domain}/oauth2/token`,
+      token: {
+        url: `${domain}/oauth2/token`,
+        // La causa real del "bug del nonce": Cognito, al federar con
+        // Google, devuelve un id_token con un claim "nonce" que
+        // oauth4webapi valida automáticamente contra "no debería haber
+        // ninguno" (nuestro checks: ["state"] nunca pidió uno) — y revienta
+        // con "unexpected ID Token nonce claim value" ANTES de que nuestro
+        // profile() llegue a correr. `conform` sí se usa de verdad en
+        // @auth/core (ver callback.ts) para interceptar la respuesta cruda
+        // del token endpoint justo antes de esa validación — acá borramos
+        // la propiedad id_token del body (no alcanza con vaciarla: tiene
+        // que no existir) para que oauth4webapi nunca llegue a intentar
+        // validarla. El endpoint userinfo (más abajo) sigue trayendo el
+        // email igual, así que no se pierde ningún dato real.
+        async conform(response: Response) {
+          const body = await response.json();
+          delete body.id_token;
+          return new Response(JSON.stringify(body), {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+          });
+        },
+      },
       userinfo: `${domain}/oauth2/userInfo`,
       clientId: process.env.AUTH_COGNITO_ID,
       clientSecret: process.env.AUTH_COGNITO_SECRET,
