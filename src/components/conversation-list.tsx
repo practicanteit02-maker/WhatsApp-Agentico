@@ -299,6 +299,15 @@ export function ConversationList({
   // llegó, no decide qué se puede ver.
   const [activeZone, setActiveZone] = useState<string>(MOCK_ZONE_OPTIONS[0]);
   const [isZoneMenuOpen, setIsZoneMenuOpen] = useState(false);
+  // Para cualquier perfil que no sea Administrador, el filtro de vista no
+  // tiene sentido con otra zona distinta a la propia (el servidor ya le
+  // manda solo los chats de su zona en /api/conversations) — se mantiene
+  // siempre fijo en su sessionZona, sin depender de una elección manual.
+  useEffect(() => {
+    if (sessionPerfil !== 'Administrador') {
+      setActiveZone(sessionZona);
+    }
+  }, [sessionPerfil, sessionZona]);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const zoneMenuRef = useRef<HTMLDivElement>(null);
   const overflowMenuRef = useRef<HTMLDivElement>(null);
@@ -1040,51 +1049,62 @@ export function ConversationList({
                 etc.) — igual que el menú de perfil, todavía no filtra ni
                 cambia nada real, solo marca cuál opción quedó elegida. Ocupa
                 el lugar donde antes iba el letrero fijo "WhatsApp". */}
-            <div className="relative" ref={zoneMenuRef}>
-              <button
-                type="button"
-                onClick={() => setIsZoneMenuOpen((open) => !open)}
-                aria-haspopup="menu"
-                aria-expanded={isZoneMenuOpen}
-                className="flex h-8 items-center gap-1.5 rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-surface)] px-3 text-xs font-medium text-foreground hover:bg-[var(--chat-hover)]"
-              >
-                <span className="size-2 flex-shrink-0 rounded-full bg-destructive" aria-hidden="true" />
-                <span className="max-w-28 truncate">{activeZone}</span>
-                <ChevronDown className="size-3.5 flex-shrink-0 text-muted-foreground" />
-              </button>
-
-              {isZoneMenuOpen && (
-                <div
-                  role="menu"
-                  aria-label="Números y zonas"
-                  className="absolute left-0 top-[calc(100%+0.25rem)] z-50 w-48 rounded-xl border border-[var(--chat-border-strong)] bg-popover p-1 text-sm text-popover-foreground shadow-lg"
+            {sessionPerfil === 'Administrador' ? (
+              <div className="relative" ref={zoneMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsZoneMenuOpen((open) => !open)}
+                  aria-haspopup="menu"
+                  aria-expanded={isZoneMenuOpen}
+                  className="flex h-8 items-center gap-1.5 rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-surface)] px-3 text-xs font-medium text-foreground hover:bg-[var(--chat-hover)]"
                 >
-                  {MOCK_ZONE_OPTIONS.map((zone) => {
-                    const isActive = zone === activeZone;
+                  <span className="size-2 flex-shrink-0 rounded-full bg-destructive" aria-hidden="true" />
+                  <span className="max-w-28 truncate">{activeZone}</span>
+                  <ChevronDown className="size-3.5 flex-shrink-0 text-muted-foreground" />
+                </button>
 
-                    return (
-                      <button
-                        key={zone}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={isActive}
-                        onClick={() => {
-                          setActiveZone(zone);
-                          setIsZoneMenuOpen(false);
-                        }}
-                        className={cn(
-                          "flex h-9 w-full items-center justify-between gap-2 rounded-lg px-2 text-left text-xs font-medium hover:bg-[var(--chat-hover)]",
-                          isActive ? "text-foreground" : "text-muted-foreground",
-                        )}
-                      >
-                        <span className="truncate">{zone}</span>
-                        {isActive && <Check className="size-3.5 flex-shrink-0 text-primary" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                {isZoneMenuOpen && (
+                  <div
+                    role="menu"
+                    aria-label="Números y zonas"
+                    className="absolute left-0 top-[calc(100%+0.25rem)] z-50 w-48 rounded-xl border border-[var(--chat-border-strong)] bg-popover p-1 text-sm text-popover-foreground shadow-lg"
+                  >
+                    {MOCK_ZONE_OPTIONS.map((zone) => {
+                      const isActive = zone === activeZone;
+
+                      return (
+                        <button
+                          key={zone}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={isActive}
+                          onClick={() => {
+                            setActiveZone(zone);
+                            setIsZoneMenuOpen(false);
+                          }}
+                          className={cn(
+                            "flex h-9 w-full items-center justify-between gap-2 rounded-lg px-2 text-left text-xs font-medium hover:bg-[var(--chat-hover)]",
+                            isActive ? "text-foreground" : "text-muted-foreground",
+                          )}
+                        >
+                          <span className="truncate">{zone}</span>
+                          {isActive && <Check className="size-3.5 flex-shrink-0 text-primary" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Para cualquier perfil que no sea Administrador no hay nada
+              // que elegir (solo puede ver su propia zona de todas formas),
+              // así que en vez del menú desplegable se muestra un pill fijo,
+              // no interactivo, con el mismo estilo visual.
+              <div className="flex h-8 items-center gap-1.5 rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-surface)] px-3 text-xs font-medium text-foreground">
+                <span className="size-2 flex-shrink-0 rounded-full bg-destructive" aria-hidden="true" />
+                <span className="max-w-28 truncate">{sessionZona}</span>
+              </div>
+            )}
 
             <div className="ml-auto flex items-center gap-1">
               {/* Funcionalidad "Nuevo chat": arrancar una conversación con un
