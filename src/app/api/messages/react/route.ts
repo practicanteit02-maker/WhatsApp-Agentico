@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inbox-settings';
+import { checkZoneAccess } from '@/lib/conversation-zones';
+import { threadKeyFor } from '@/lib/inbox-data';
 import { whatsappClient } from '@/lib/whatsapp-client';
 
 type ReactBody = {
@@ -28,6 +30,12 @@ export async function POST(request: Request) {
         { error: 'to and messageId are required' },
         { status: 400 }
       );
+    }
+
+    const threadKey = threadKeyFor(phoneNumberId, to);
+    const access = await checkZoneAccess(threadKey);
+    if (!access.allowed) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
     }
 
     // Importante: el campo `emoji` siempre se manda, incluso vacío — así es

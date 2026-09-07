@@ -6,6 +6,8 @@ import {
   type MetaMessage
 } from '@kapso/whatsapp-cloud-api';
 import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inbox-settings';
+import { checkZoneAccess } from '@/lib/conversation-zones';
+import { threadKeyFor } from '@/lib/inbox-data';
 import { whatsappClient } from '@/lib/whatsapp-client';
 
 type MessageTypeData = {
@@ -151,6 +153,23 @@ export async function GET(
     const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 50;
     const phoneNumber = await resolvePhoneNumberContext(searchParams.get('phoneNumberId') ?? undefined);
     const phoneNumberId = phoneNumber.phone_number_id;
+
+    // Control de acceso por zona: hace falta el contacto (teléfono o BSUID)
+    // de esta conversación puntual para calcular su threadKey, y eso no
+    // viene en la URL — se pide acá con conversations.get(), el mismo dato
+    // que /api/conversations ya usa para su propio filtrado por zona, así
+    // que el threadKey calculado siempre coincide.
+    const conversationRecord = await whatsappClient.conversations.get({ conversationId });
+    const threadKey = threadKeyFor(
+      phoneNumberId,
+      conversationRecord.phoneNumber ?? '',
+      conversationId,
+      typeof conversationRecord.businessScopedUserId === 'string' ? conversationRecord.businessScopedUserId : undefined
+    );
+    const access = await checkZoneAccess(threadKey);
+    if (!access.allowed) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
+    }
 
     const response = await whatsappClient.messages.listByConversation({
       phoneNumberId,

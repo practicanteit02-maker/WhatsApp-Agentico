@@ -4,7 +4,10 @@ import {
   type ConversationKapsoExtensions,
   type ConversationRecord
 } from '@kapso/whatsapp-cloud-api';
+import { auth } from '@/auth';
 import { configurationErrorResponse, getTrackedPhoneNumbers } from '@/lib/inbox-settings';
+import { getAllZones } from '@/lib/conversation-zones';
+import { threadKeyFor } from '@/lib/inbox-data';
 import { whatsappClient } from '@/lib/whatsapp-client';
 import type { KapsoPhoneNumber } from '@/types/settings';
 
@@ -212,8 +215,29 @@ export async function GET(request: Request) {
       )
     ).flat();
 
+    // Filtrado real por zona: un Administrador ve todo, como siempre. Para
+    // cualquier otro perfil, el navegador nunca recibe los chats de otras
+    // zonas — no es solo ocultarlos en la interfaz, se descartan acá,
+    // server-side, antes de mandar la respuesta.
+    const session = await auth();
+    const visibleData = session?.user?.perfil === 'Administrador'
+      ? transformedData
+      : await (async () => {
+          const zones = await getAllZones();
+          const sessionZona = session?.user?.zona;
+          return transformedData.filter((conversation) => {
+            const threadKey = threadKeyFor(
+              conversation.phoneNumberId,
+              conversation.phoneNumber,
+              conversation.id,
+              conversation.businessScopedUserId
+            );
+            return Boolean(sessionZona) && zones[threadKey] === sessionZona;
+          });
+        })();
+
     return NextResponse.json({
-      data: transformedData,
+      data: visibleData,
       partialErrors: responses
         .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
         .map(result => result.reason instanceof Error ? result.reason.message : 'Failed to fetch conversations')

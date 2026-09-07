@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inbox-settings';
+import { checkZoneAccess } from '@/lib/conversation-zones';
+import { threadKeyFor } from '@/lib/inbox-data';
 import { whatsappClient } from '@/lib/whatsapp-client';
 
 export async function GET(
@@ -11,6 +13,22 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const configuredPhoneNumber = await resolvePhoneNumberContext(searchParams.get('phoneNumberId') ?? undefined);
     const phoneNumberId = configuredPhoneNumber.phone_number_id;
+
+    // Control de acceso por zona: a diferencia de los demás endpoints, este
+    // no tenía forma de identificar a qué conversación pertenece el media
+    // (solo recibía mediaId + phoneNumberId) — message-view.tsx ahora manda
+    // también el contacto (phoneNumber o businessScopedUserId) para poder
+    // calcular el threadKey acá.
+    const threadKey = threadKeyFor(
+      phoneNumberId,
+      searchParams.get('phoneNumber') ?? '',
+      undefined,
+      searchParams.get('businessScopedUserId') ?? undefined
+    );
+    const access = await checkZoneAccess(threadKey);
+    if (!access.allowed) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
+    }
 
     // Get metadata for mime type
     const metadata = await whatsappClient.media.get({
