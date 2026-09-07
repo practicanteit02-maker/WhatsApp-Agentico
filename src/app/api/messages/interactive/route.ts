@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inbox-settings';
+import { checkZoneAccess } from '@/lib/conversation-zones';
+import { threadKeyFor } from '@/lib/inbox-data';
 import { whatsappClient } from '@/lib/whatsapp-client';
 
 export async function POST(request: Request) {
@@ -14,6 +16,12 @@ export async function POST(request: Request) {
         { error: 'Missing required fields: phoneNumber, body, buttons' },
         { status: 400 }
       );
+    }
+
+    const threadKey = threadKeyFor(phoneNumberId, phoneNumber);
+    const access = await checkZoneAccess(threadKey);
+    if (!access.allowed) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
     }
 
     // Validate buttons

@@ -8,13 +8,19 @@ import { Skeleton } from '@/components/ui/skeleton';
 type Props = {
   mediaId: string;
   phoneNumberId?: string;
+  /** Contacto del chat abierto — junto con phoneNumberId (y/o
+   * businessScopedUserId) es lo que necesita /api/media/[mediaId] del lado
+   * del servidor para calcular el threadKey y aplicar el control de acceso
+   * por zona (ver src/lib/conversation-zones.ts). */
+  phoneNumber?: string;
+  businessScopedUserId?: string;
   messageType: string;
   caption?: string | null;
   filename?: string | null;
   isOutbound?: boolean;
 };
 
-export function MediaMessage({ mediaId, phoneNumberId, messageType, caption, filename, isOutbound }: Props) {
+export function MediaMessage({ mediaId, phoneNumberId, phoneNumber, businessScopedUserId, messageType, caption, filename, isOutbound }: Props) {
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -29,10 +35,16 @@ export function MediaMessage({ mediaId, phoneNumberId, messageType, caption, fil
     if (phoneNumberId) {
       params.set('phoneNumberId', phoneNumberId);
     }
+    if (phoneNumber) {
+      params.set('phoneNumber', phoneNumber);
+    }
+    if (businessScopedUserId) {
+      params.set('businessScopedUserId', businessScopedUserId);
+    }
     setMediaUrl(`/api/media/${mediaId}${params.size ? `?${params.toString()}` : ''}`);
     setLoading(false);
     setLoadFailed(false);
-  }, [mediaId, phoneNumberId]);
+  }, [mediaId, phoneNumberId, phoneNumber, businessScopedUserId]);
 
   if (loading) {
     return (

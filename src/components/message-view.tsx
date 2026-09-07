@@ -2000,6 +2000,8 @@ export function MessageView({
                           <MediaMessage
                             mediaId={message.metadata.mediaId}
                             phoneNumberId={message.phoneNumberId || phoneNumberId}
+                            phoneNumber={phoneNumber}
+                            businessScopedUserId={businessScopedUserId}
                             messageType={message.messageType}
                             caption={message.caption}
                             filename={message.filename}
