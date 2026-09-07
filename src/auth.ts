@@ -11,7 +11,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       type: "oauth",
       authorization: {
         url: `${domain}/oauth2/authorize`,
-        params: { scope: "openid email profile" },
+        params: { scope: "email profile" },
       },
       token: `${domain}/oauth2/token`,
       userinfo: `${domain}/oauth2/userInfo`,
