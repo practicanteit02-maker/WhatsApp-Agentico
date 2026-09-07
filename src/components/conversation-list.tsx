@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { format, isToday, isValid, isYesterday } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { signOut } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
 import { Archive, ArchiveRestore, ArrowLeft, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, Search, Settings, Square, SquarePen, Star, TriangleAlert, User, UserCog, Video, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useInboxLiveUpdates } from '@/hooks/use-inbox-live-updates';
@@ -252,6 +252,12 @@ export function ConversationList({
   sessionZona = 'Sin asignar',
   onOpenNewChat,
 }: Props) {
+  // Nombre real para el encabezado del menú de cuenta (ver más abajo) — el
+  // perfil/zona siguen llegando por props desde src/app/page.tsx (esos ya
+  // los necesita MessageView también), pero el nombre solo se usa acá.
+  const { data: session } = useSession();
+  const displayName = session?.user?.name ?? session?.user?.email ?? 'Usuario';
+
   const [searchQuery, setSearchQuery] = useState('');
   // Funcionalidad "Nuevo chat": ver new-chat-dialog.tsx.
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
@@ -1070,7 +1076,7 @@ export function ConversationList({
                       <User className="size-4" />
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">Usuario</p>
+                      <p className="truncate text-sm font-semibold text-foreground">{displayName}</p>
                     </div>
                   </div>
 

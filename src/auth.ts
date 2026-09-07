@@ -85,9 +85,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientSecret: process.env.AUTH_COGNITO_SECRET,
       checks: ["state"],
       profile(profile: any) {
+        // Confirmado con un login real (ver JSON en la conversación): hoy
+        // Cognito no devuelve ningún claim "name" para usuarios federados
+        // con Google (el Attribute Mapping de Google→Cognito en la consola
+        // de AWS no lo tiene mapeado), así que esto cae siempre a
+        // profile.email por ahora — pero queda listo para el día que se
+        // arregle ese mapeo, sin tener que tocar código de nuevo.
         return {
           id: profile.sub,
-          name: profile.email,
+          name: profile.name ?? profile.email,
           email: profile.email,
         };
       },
