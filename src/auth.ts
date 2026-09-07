@@ -26,14 +26,12 @@ const DEFAULT_ZONA = "Sin asignar";
  */
 async function lookupPerfilYZona(correo: string): Promise<{ perfil: string; zona: string }> {
   try {
-    console.log("Buscando en DynamoDB con correo:", JSON.stringify(correo));
     const result = await dynamoClient.send(
       new GetCommand({
         TableName: USUARIOS_TABLE,
         Key: { correo },
       })
     );
-    console.log("Resultado de DynamoDB:", JSON.stringify(result));
 
     if (result.Item) {
       return {
@@ -56,7 +54,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       type: "oauth",
       authorization: {
         url: `${domain}/oauth2/authorize`,
-        params: { scope: "email profile" },
+        params: { scope: "openid email profile" },
       },
       token: `${domain}/oauth2/token`,
       userinfo: `${domain}/oauth2/userInfo`,
@@ -64,7 +62,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientSecret: process.env.AUTH_COGNITO_SECRET,
       checks: ["state"],
       profile(profile: any) {
-        console.log("Profile recibido de Cognito:", JSON.stringify(profile));
         return {
           id: profile.sub,
           name: profile.email,
@@ -79,7 +76,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // posteriores del token ya queda guardado ahí, así que no repite la
     // consulta en cada request.
     async jwt({ token, user }) {
-      console.log("Callback jwt ejecutado. user:", JSON.stringify(user), "token.email:", token.email);
       if (user?.email) {
         const { perfil, zona } = await lookupPerfilYZona(user.email);
         token.perfil = perfil;
