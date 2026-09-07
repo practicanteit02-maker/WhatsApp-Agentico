@@ -78,6 +78,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // posteriores del token ya queda guardado ahí, así que no repite la
     // consulta en cada request.
     async jwt({ token, user }) {
+      console.log("Callback jwt ejecutado. user:", JSON.stringify(user), "token.email:", token.email);
       if (user?.email) {
         const { perfil, zona } = await lookupPerfilYZona(user.email);
         token.perfil = perfil;
