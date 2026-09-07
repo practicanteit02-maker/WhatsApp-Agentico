@@ -8,8 +8,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientSecret: process.env.AUTH_COGNITO_SECRET,
       issuer: process.env.AUTH_COGNITO_ISSUER,
       checks: ["state"],
+      idToken: false,
+      profile(profile) {
+        return {
+          id: profile.sub,
+          name: profile.name ?? profile.email,
+          email: profile.email,
+        };
+      },
     }),
   ],
 });
-
-// force rebuild
