@@ -26,12 +26,14 @@ const DEFAULT_ZONA = "Sin asignar";
  */
 async function lookupPerfilYZona(correo: string): Promise<{ perfil: string; zona: string }> {
   try {
+    console.log("Buscando en DynamoDB con correo:", JSON.stringify(correo));
     const result = await dynamoClient.send(
       new GetCommand({
         TableName: USUARIOS_TABLE,
         Key: { correo },
       })
     );
+    console.log("Resultado de DynamoDB:", JSON.stringify(result));
 
     if (result.Item) {
       return {
