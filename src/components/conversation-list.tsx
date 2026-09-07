@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { format, isToday, isValid, isYesterday } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { signOut } from 'next-auth/react';
 import { Archive, ArchiveRestore, ArrowLeft, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, Search, Settings, Square, SquarePen, Star, User, UserCog, Video, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useInboxLiveUpdates } from '@/hooks/use-inbox-live-updates';
@@ -1108,14 +1109,15 @@ export function ConversationList({
 
                   <div className="my-1 h-px bg-[var(--chat-border-strong)]" />
 
-                  {/* Funcionalidad "Perfil": botón habilitado (ya no
-                      deshabilitado/grisado), pero como todavía no existe una
-                      sesión real que cerrar, por ahora solo cierra el menú —
-                      no hace ningún cambio real de sesión. */}
+                  {/* Cierra la sesión real de NextAuth (proveedor Cognito,
+                      ver src/auth.ts) y vuelve a la página de inicio. */}
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => setIsProfileMenuOpen(false)}
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      signOut({ callbackUrl: '/' });
+                    }}
                     className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-xs font-medium text-foreground hover:bg-[var(--chat-hover)]"
                   >
                     <LogOut className="size-3.5" />
