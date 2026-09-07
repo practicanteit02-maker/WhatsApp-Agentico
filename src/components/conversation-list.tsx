@@ -11,12 +11,10 @@ import { cn } from '@/lib/utils';
 import { useInboxLiveUpdates } from '@/hooks/use-inbox-live-updates';
 import { playReceivedMessageSound, playSentMessageSound } from '@/lib/notification-sounds';
 import {
-  CONVERSATION_ZONES_QUERY_KEY,
   CONVERSATIONS_QUERY_KEY,
   type Conversation,
   type ConversationThread,
   fetchConversations,
-  fetchConversationZones,
   filterConversationThreads,
   groupConversationsByPhoneNumber,
   loadStoredStringSet,
@@ -32,7 +30,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { NewChatDialog } from '@/components/new-chat-dialog';
 import { type StarredMessage } from '@/lib/starred-messages';
 import { getProfileStyle } from '@/lib/mock-profiles';
-import { getAssignableZones, MOCK_ZONE_OPTIONS } from '@/lib/mock-zones';
+import { getMockZoneForThreadKey, MOCK_ZONE_OPTIONS } from '@/lib/mock-zones';
 
 // Funcionalidad "Vista previa de media": en vez del texto feo que genera
 // Kapso para el último mensaje cuando es una foto/video/audio/documento sin
@@ -290,13 +288,14 @@ export function ConversationList({
   // Funcionalidad "Mensajes destacados": si el panel que lista todos los
   // mensajes con estrella está abierto (ver el menú "⋮" y el render más abajo).
   const [isStarredPanelOpen, setIsStarredPanelOpen] = useState(false);
-  // Menú de cuenta junto al título "WhatsApp" — nombre, perfil y zona reales
-  // (sesión de NextAuth, ver src/auth.ts), "Cerrar sesión" real.
+  // Funcionalidad "Perfil": menú de cuenta junto al título "WhatsApp" — por
+  // ahora es un adelanto visual de cómo se va a ver una vez que exista el
+  // login (todavía no hay sistema de autenticación en la app), así que
+  // muestra datos de ejemplo y sus acciones no hacen nada real todavía.
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  // Funcionalidad "Números/Zonas": filtro de VISTA manual, aparte del
-  // control de acceso real por rol (que ya pasó server-side en
-  // /api/conversations) — elegir una zona acá restringe más lo que ya
-  // llegó, no decide qué se puede ver.
+  // Funcionalidad "Números/Zonas": menú desplegable junto al título
+  // "WhatsApp" — también un adelanto visual (ver mock-zones.ts), elegir una
+  // opción solo cambia cuál se ve marcada, no filtra nada todavía.
   const [activeZone, setActiveZone] = useState<string>(MOCK_ZONE_OPTIONS[0]);
   const [isZoneMenuOpen, setIsZoneMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
@@ -338,60 +337,6 @@ export function ConversationList({
     refetchInterval: 10_000,
     refetchIntervalInBackground: true,
   });
-
-  // Zona real de cada chat (ver src/lib/conversation-zones.ts) — reemplaza
-  // el sistema mock de mock-zones.ts. El filtrado por rol (Administrador ve
-  // todo, cualquier otro perfil solo su zona) ya pasó server-side en
-  // /api/conversations; este mapa es solo para mostrar la píldora de cada
-  // chat visible y, si sos Administrador, poder asignarla.
-  const { data: zoneMap = {} } = useQuery({
-    queryKey: CONVERSATION_ZONES_QUERY_KEY,
-    queryFn: fetchConversationZones,
-    refetchInterval: 30_000,
-  });
-
-  const [zoneEditorThreadKey, setZoneEditorThreadKey] = useState<string | null>(null);
-  const [zoneEditorPosition, setZoneEditorPosition] = useState<{ top: number; right: number } | null>(null);
-
-  const assignZone = async (threadKey: string, zona: string) => {
-    setZoneEditorThreadKey(null);
-    try {
-      const response = await fetch('/api/conversation-zones', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadKey, zona }),
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.error || 'Failed to assign zone');
-      }
-      queryClient.invalidateQueries({ queryKey: CONVERSATION_ZONES_QUERY_KEY });
-    } catch (error) {
-      console.error('No se pudo asignar la zona:', error);
-    }
-  };
-
-  useEffect(() => {
-    if (!zoneEditorThreadKey) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!(event.target as HTMLElement).closest('[data-zone-editor]')) {
-        setZoneEditorThreadKey(null);
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setZoneEditorThreadKey(null);
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [zoneEditorThreadKey]);
 
   // En el instante en que el webhook registra un mensaje nuevo, actualiza la
   // vista previa de este chat directamente para que se refleje al instante
@@ -441,20 +386,17 @@ export function ConversationList({
     [conversations],
   );
 
-  // Funcionalidad "Números/Zonas": este es el filtro de VISTA manual (elegir
-  // una zona puntual dentro de lo que ya te llegó del servidor) — el control
-  // de acceso real por rol ya pasó server-side en /api/conversations, esto
-  // solo restringe más la vista dentro de lo que ya podés ver. Si hay una
-  // zona específica elegida (no "Todos mis números"), un chat solo cuenta
-  // para lo de abajo cuando es de esa zona — así, archivar un chat de
-  // Medellín solo lo mete a "Archived" cuando estás viendo Medellín (o
-  // "Todos mis números"), no cuando estás en otra zona.
+  // Funcionalidad "Números/Zonas": si hay una zona específica elegida (no
+  // "Todos mis números"), un chat solo cuenta para lo de abajo cuando es de
+  // esa zona — así, archivar un chat de Medellín solo lo mete a "Archived"
+  // cuando estás viendo Medellín (o "Todos mis números"), no cuando estás en
+  // otra zona.
   const archivedCount = useMemo(
     () => threads.filter((thread) =>
       archivedThreadKeys.has(thread.key)
-      && (activeZone === 'Todos mis números' || zoneMap[thread.key] === activeZone)
+      && (activeZone === 'Todos mis números' || getMockZoneForThreadKey(thread.key) === activeZone)
     ).length,
-    [threads, archivedThreadKeys, activeZone, zoneMap],
+    [threads, archivedThreadKeys, activeZone],
   );
 
   /** Cuántos chats archivados tienen algo sin leer — igual que en WhatsApp
@@ -465,9 +407,9 @@ export function ConversationList({
     () => threads.filter((thread) =>
       archivedThreadKeys.has(thread.key)
       && isThreadMarkedUnread(thread, threadSeenCounts, manuallyUnreadThreadKeys)
-      && (activeZone === 'Todos mis números' || zoneMap[thread.key] === activeZone)
+      && (activeZone === 'Todos mis números' || getMockZoneForThreadKey(thread.key) === activeZone)
     ).length,
-    [threads, archivedThreadKeys, threadSeenCounts, manuallyUnreadThreadKeys, activeZone, zoneMap],
+    [threads, archivedThreadKeys, threadSeenCounts, manuallyUnreadThreadKeys, activeZone],
   );
 
   const filteredThreads = useMemo(() => {
@@ -476,7 +418,7 @@ export function ConversationList({
     return searchMatched.filter((thread) => {
       // Funcionalidad "Números/Zonas": si hay una zona específica elegida
       // (no "Todos mis números"), solo se muestran los chats de esa zona.
-      if (activeZone !== 'Todos mis números' && zoneMap[thread.key] !== activeZone) {
+      if (activeZone !== 'Todos mis números' && getMockZoneForThreadKey(thread.key) !== activeZone) {
         return false;
       }
       if (viewingArchived) {
@@ -486,7 +428,7 @@ export function ConversationList({
       if (unreadOnly && !isThreadMarkedUnread(thread, threadSeenCounts, manuallyUnreadThreadKeys)) return false;
       return true;
     });
-  }, [threads, searchQuery, viewingArchived, archivedThreadKeys, unreadOnly, threadSeenCounts, manuallyUnreadThreadKeys, activeZone, zoneMap]);
+  }, [threads, searchQuery, viewingArchived, archivedThreadKeys, unreadOnly, threadSeenCounts, manuallyUnreadThreadKeys, activeZone]);
 
   /** Funcionalidad "Números/Zonas": si la zona elegida tiene al menos un
    * número en la bandeja normal (sin contar archivados) — para distinguir
@@ -495,9 +437,9 @@ export function ConversationList({
    * que la zona está vacía). */
   const activeZoneHasThreads = useMemo(
     () => activeZone === 'Todos mis números' || threads.some((thread) =>
-      !archivedThreadKeys.has(thread.key) && zoneMap[thread.key] === activeZone
+      !archivedThreadKeys.has(thread.key) && getMockZoneForThreadKey(thread.key) === activeZone
     ),
-    [threads, archivedThreadKeys, activeZone, zoneMap],
+    [threads, archivedThreadKeys, activeZone],
   );
 
   // Siembra la base de "visto": en la primerísima carga, trata cada chat que
@@ -1457,9 +1399,9 @@ export function ConversationList({
               // Funcionalidad "Seleccionar chats": esta fila está marcada en el modo de selección múltiple.
               const isSelectedForBulk = selectedThreadKeysForBulk.has(thread.key);
 
-              // Zona real de este chat (ver src/lib/conversation-zones.ts) —
-              // undefined si todavía no tiene una asignada.
-              const zone = zoneMap[thread.key];
+              // Funcionalidad "Números/Zonas": de qué zona de ejemplo es este
+              // número, para la píldora junto a la hora (ver mock-zones.ts).
+              const zone = getMockZoneForThreadKey(thread.key);
 
               return (
                 <div
@@ -1546,66 +1488,13 @@ export function ConversationList({
                         )}
                       </div>
                       <div className="ml-2 flex flex-shrink-0 flex-col items-end gap-1 pt-0.5">
-                        {/* Píldora con la zona real de este chat (ver
-                            src/lib/conversation-zones.ts) — clickeable solo
-                            para Administrador, que puede asignarla o
-                            cambiarla; para cualquier otro perfil es de solo
-                            lectura (y, al llegar server-side ya filtrado por
-                            zona, prácticamente siempre va a coincidir con la
-                            suya propia). */}
-                        {sessionPerfil === 'Administrador' ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setZoneEditorPosition({ top: e.clientY, right: window.innerWidth - e.clientX });
-                              setZoneEditorThreadKey(thread.key);
-                            }}
-                            className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-primary hover:bg-primary/25"
-                          >
-                            <MapPin className="size-2.5 flex-shrink-0" />
-                            <span className="truncate">{zone ?? 'Sin zona'}</span>
-                          </button>
-                        ) : (
-                          <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-primary">
-                            <MapPin className="size-2.5 flex-shrink-0" />
-                            <span className="truncate">{zone ?? 'Sin zona'}</span>
-                          </span>
-                        )}
-
-                        {zoneEditorThreadKey === thread.key && zoneEditorPosition && createPortal(
-                          <div
-                            role="menu"
-                            aria-label="Asignar zona"
-                            data-zone-editor
-                            style={{ position: 'fixed', top: zoneEditorPosition.top, right: zoneEditorPosition.right }}
-                            className="z-50 w-36 rounded-md border border-[var(--chat-border-strong)] bg-popover p-1 text-sm text-popover-foreground shadow-lg"
-                          >
-                            {getAssignableZones().map((option) => {
-                              const isActive = option === zone;
-
-                              return (
-                                <button
-                                  key={option}
-                                  type="button"
-                                  role="menuitem"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    assignZone(thread.key, option);
-                                  }}
-                                  className={cn(
-                                    'flex h-8 w-full items-center justify-between gap-2 rounded px-2 text-left text-xs font-medium hover:bg-[var(--chat-hover)]',
-                                    isActive ? 'text-foreground' : 'text-muted-foreground',
-                                  )}
-                                >
-                                  <span className="truncate">{option}</span>
-                                  {isActive && <Check className="size-3.5 flex-shrink-0 text-primary" />}
-                                </button>
-                              );
-                            })}
-                          </div>,
-                          document.body
-                        )}
+                        {/* Funcionalidad "Números/Zonas": píldora que muestra
+                            de qué zona de ejemplo es este número (ver
+                            getMockZoneForThreadKey en mock-zones.ts). */}
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-primary">
+                          <MapPin className="size-2.5 flex-shrink-0" />
+                          <span className="truncate">{zone}</span>
+                        </span>
 
                         {thread.lastMessage && (
                           <span className="text-[11px] leading-4 text-muted-foreground">

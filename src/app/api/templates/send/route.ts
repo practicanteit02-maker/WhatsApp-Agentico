@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { buildTemplateSendPayload } from '@kapso/whatsapp-cloud-api';
 import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inbox-settings';
-import { checkZoneAccess } from '@/lib/conversation-zones';
-import { threadKeyFor } from '@/lib/inbox-data';
 import { whatsappClient } from '@/lib/whatsapp-client';
 import type { TemplateParameterInfo } from '@/types/whatsapp';
 
@@ -50,12 +48,6 @@ export async function POST(request: Request) {
         { error: `Missing required field(s): ${missingFields.join(', ')}` },
         { status: 400 }
       );
-    }
-
-    const threadKey = threadKeyFor(phoneNumberId, to ?? '', undefined, businessScopedUserId);
-    const access = await checkZoneAccess(threadKey);
-    if (!access.allowed) {
-      return NextResponse.json({ error: access.error }, { status: access.status });
     }
 
     // Confirmado con soporte de Kapso: Meta no permite mandarle plantillas de

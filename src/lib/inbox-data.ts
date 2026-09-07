@@ -182,22 +182,6 @@ export async function fetchConversations(): Promise<Conversation[]> {
   return data.data || [];
 }
 
-export const CONVERSATION_ZONES_QUERY_KEY = ['conversation-zones'] as const;
-
-/** Zona real de cada chat (ver src/lib/conversation-zones.ts) — mapa
- * `{ [threadKey]: zona }`. Los chats sin fila todavía en la tabla
- * simplemente no aparecen acá. */
-export async function fetchConversationZones(): Promise<Record<string, string>> {
-  const response = await fetch('/api/conversation-zones');
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Failed to fetch conversation zones');
-  }
-
-  return data.zones || {};
-}
-
 export async function fetchConversationMessages(conversationId: string, phoneNumberId?: string): Promise<Message[]> {
   const params = new URLSearchParams({ limit: '100' });
   if (phoneNumberId) {

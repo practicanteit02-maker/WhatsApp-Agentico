@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { sendAutoReply } from '@/lib/auto-reply';
-import { checkZoneAccess } from '@/lib/conversation-zones';
-import { threadKeyFor } from '@/lib/inbox-data';
 
 type TriggerAIReplyBody = {
   phoneNumberId?: string;
@@ -30,12 +28,6 @@ export async function POST(request: Request) {
         { error: 'phoneNumberId, to and incomingText are required' },
         { status: 400 }
       );
-    }
-
-    const threadKey = threadKeyFor(phoneNumberId, to);
-    const access = await checkZoneAccess(threadKey);
-    if (!access.allowed) {
-      return NextResponse.json({ error: access.error }, { status: access.status });
     }
 
     // messageId permite compartir el registro anti-duplicados del webhook
