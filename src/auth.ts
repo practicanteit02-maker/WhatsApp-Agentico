@@ -64,6 +64,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientSecret: process.env.AUTH_COGNITO_SECRET,
       checks: ["state"],
       profile(profile: any) {
+        console.log("Profile recibido de Cognito:", JSON.stringify(profile));
         return {
           id: profile.sub,
           name: profile.email,
