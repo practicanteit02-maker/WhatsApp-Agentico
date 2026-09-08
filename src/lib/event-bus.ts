@@ -88,9 +88,19 @@ export type ChatCollabPayload = {
   presence?: ChatPresenceState;
   attribution?: { messageId: string; profile: string };
   /**
+   * Funcionalidad "Estado del chat" (ver src/lib/chat-status.ts): nuevo
+   * estado ('Nuevo' | 'En proceso' | 'Cerrado') cuando alguien lo cambia
+   * desde /api/conversation-status — reusa este mismo canal en vez de uno
+   * aparte, así que conversation-list.tsx (que ya escucha esto para poder
+   * filtrar por zona) puede actualizar la etiqueta de cualquier chat de la
+   * lista al instante, sin esperar su refetch periódico.
+   */
+  estado?: string;
+  /**
    * Igual que InboxUpdatePayload.zona (ver más arriba): la zona real del
    * chat, resuelta una sola vez por quien emite el evento (src/lib/chat-collab.ts,
-   * que ya tiene el threadKey a mano) — no por cada conexión SSE que lo
+   * o src/app/api/conversation-status/route.ts para los cambios de estado,
+   * que ya tienen el threadKey a mano) — no por cada conexión SSE que lo
    * reciba.
    */
   zona?: string;

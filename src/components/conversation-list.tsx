@@ -9,6 +9,7 @@ import { signOut, useSession } from 'next-auth/react';
 import { Archive, ArchiveRestore, ArrowLeft, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, Search, Settings, Square, SquarePen, Star, Tag, TriangleAlert, User, UserCog, Video, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useInboxLiveUpdates } from '@/hooks/use-inbox-live-updates';
+import type { ChatCollabPayload } from '@/lib/event-bus';
 import { playReceivedMessageSound, playSentMessageSound } from '@/lib/notification-sounds';
 import {
   CONVERSATION_STATUS_QUERY_KEY,
@@ -533,6 +534,17 @@ export function ConversationList({
       playSentMessageSound();
     }
     refetch();
+  }, (payload: ChatCollabPayload) => {
+    // Funcionalidad "Estado del chat en vivo": mismo canal SSE de
+    // typing/atribución (ver ChatCollabPayload.estado en event-bus.ts) —
+    // a diferencia de message-view.tsx, acá no se filtra por un solo
+    // threadKey: la lista completa escucha cambios de estado de
+    // cualquiera de sus chats visibles.
+    if (!payload.estado) return;
+    queryClient.setQueryData<Record<string, string>>(
+      CONVERSATION_STATUS_QUERY_KEY,
+      (current = {}) => ({ ...current, [payload.threadKey]: payload.estado as string }),
+    );
   });
 
   const threads = useMemo(

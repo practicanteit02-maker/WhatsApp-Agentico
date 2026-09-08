@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAllStatuses, isValidStatus, setStatus } from '@/lib/chat-status';
-import { checkZoneAccess } from '@/lib/conversation-zones';
+import { checkZoneAccess, getZone } from '@/lib/conversation-zones';
+import { emitChatCollabUpdate } from '@/lib/event-bus';
 
 /**
  * Estado de atención de cada chat (ver src/lib/chat-status.ts). GET es de
@@ -35,5 +36,16 @@ export async function POST(request: Request) {
   }
 
   await setStatus(body.threadKey, body.estado);
+
+  // Funcionalidad "Estado del chat en vivo": avisa por el mismo canal SSE
+  // que ya usan typing/atribución (ver ChatCollabPayload.estado en
+  // event-bus.ts) para que cualquier otra pestaña abierta actualice la
+  // etiqueta al instante, sin esperar su refetch periódico. La zona se
+  // resuelve acá (no reusa el resultado de checkZoneAccess, que para un
+  // Administrador nunca llega a consultarla) para que el evento viaje ya
+  // filtrado por zona igual que el resto.
+  const zona = await getZone(body.threadKey);
+  emitChatCollabUpdate({ threadKey: body.threadKey, estado: body.estado, zona });
+
   return NextResponse.json({ ok: true });
 }

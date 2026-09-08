@@ -98,6 +98,35 @@ function buildLiveMessageFromPayload(payload: InboundWebhookPayload) {
   };
 }
 
+// Caché en memoria de zona-por-conversación: un mismo chat activo genera
+// varios webhooks seguidos en poco tiempo (el mensaje entrante, y después
+// "enviado" → "entregado" → "leído" por cada respuesta nuestra) — sin esto,
+// resolveEventZona() le pegaba a la API de Kapso una vez por cada uno de
+// esos eventos, aunque la zona de ese chat no cambió entre medio. Con el
+// caché, solo el primer evento de una conversación paga ese viaje de red;
+// el resto se resuelve al instante. Vencimiento corto (no hace falta que
+// sea largo: si alguien reasigna la zona de un chat a mitad de una
+// conversación activa, el peor caso es que el próximo par de eventos
+// viajen todavía con la zona vieja, hasta que venza el caché — el sondeo
+// de respaldo igual reconcilia todo después). Mismo patrón que
+// getProcessedMessageIds en src/lib/auto-reply.ts: vive en globalThis para
+// sobrevivir la recarga de módulos de Turbopack en desarrollo.
+const CONVERSATION_ZONA_CACHE_TTL_MS = 8 * 60 * 1000; // 8 minutos
+
+type CachedConversationZona = {
+  threadKey: string;
+  zona: string | undefined;
+  cachedAt: number;
+};
+
+function getConversationZonaCache(): Map<string, CachedConversationZona> {
+  const store = globalThis as unknown as { __webhookConversationZonaCache?: Map<string, CachedConversationZona> };
+  if (!store.__webhookConversationZonaCache) {
+    store.__webhookConversationZonaCache = new Map();
+  }
+  return store.__webhookConversationZonaCache;
+}
+
 /**
  * Zona real del chat de este evento de webhook (ver src/lib/conversation-zones.ts),
  * para que /api/events pueda decidir a qué conexiones SSE reenviarlo — ver
@@ -107,14 +136,28 @@ function buildLiveMessageFromPayload(payload: InboundWebhookPayload) {
  * entrantes), así que acá se pide con conversations.get() — la misma
  * consulta global por id que ya usa /api/messages/[conversationId] — para
  * poder calcular el mismo threadKey que el resto de la app. Se resuelve una
- * sola vez por evento (acá, en el productor), no una vez por cada conexión
- * SSE abierta que lo reciba.
+ * sola vez por evento (acá, en el productor, y con el caché de arriba), no
+ * una vez por cada conexión SSE abierta que lo reciba.
  */
 async function resolveEventZona(payload: InboundWebhookPayload): Promise<string | undefined> {
   const conversationId = payload.conversation?.id;
   const phoneNumberId = payload.phone_number_id;
   if (!conversationId || !phoneNumberId) {
     return undefined;
+  }
+
+  const cache = getConversationZonaCache();
+
+  // Barrido de entradas vencidas — mismo patrón que claimMessageId en
+  // src/lib/auto-reply.ts, para que el Map no crezca sin límite.
+  const cutoff = Date.now() - CONVERSATION_ZONA_CACHE_TTL_MS;
+  for (const [id, entry] of cache) {
+    if (entry.cachedAt < cutoff) cache.delete(id);
+  }
+
+  const cached = cache.get(conversationId);
+  if (cached) {
+    return cached.zona;
   }
 
   try {
@@ -125,7 +168,12 @@ async function resolveEventZona(payload: InboundWebhookPayload): Promise<string 
       conversationId,
       typeof conversationRecord.businessScopedUserId === 'string' ? conversationRecord.businessScopedUserId : undefined
     );
-    return await getZone(threadKey);
+    const zona = await getZone(threadKey);
+    // Solo se cachea el resultado de una consulta exitosa (aunque no
+    // tenga zona asignada todavía) — un fallo de Kapso/Dynamo no queda
+    // "atascado" en el caché, se reintenta en el próximo evento.
+    cache.set(conversationId, { threadKey, zona, cachedAt: Date.now() });
+    return zona;
   } catch (error) {
     console.error('No se pudo resolver la zona del chat para el evento SSE:', error);
     return undefined;
