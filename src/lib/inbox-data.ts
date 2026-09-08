@@ -215,6 +215,23 @@ export async function fetchChatAiConfig(): Promise<Record<string, boolean>> {
   return data.config || {};
 }
 
+export const CONVERSATION_STATUS_QUERY_KEY = ['conversation-status'] as const;
+
+/** Funcionalidad "Estado del chat": en qué punto de atención está cada
+ * conversación (ver src/lib/chat-status.ts) — mapa `{ [threadKey]: estado }`.
+ * Los chats sin fila todavía en la tabla no aparecen acá y se tratan como
+ * "Nuevo" (ver getStatus). */
+export async function fetchConversationStatuses(): Promise<Record<string, string>> {
+  const response = await fetch('/api/conversation-status');
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to fetch conversation statuses');
+  }
+
+  return data.statuses || {};
+}
+
 export async function fetchConversationMessages(conversationId: string, phoneNumberId?: string): Promise<Message[]> {
   const params = new URLSearchParams({ limit: '100' });
   if (phoneNumberId) {

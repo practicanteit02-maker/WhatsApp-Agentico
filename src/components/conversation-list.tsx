@@ -6,16 +6,18 @@ import Link from 'next/link';
 import { format, isToday, isValid, isYesterday } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { signOut, useSession } from 'next-auth/react';
-import { Archive, ArchiveRestore, ArrowLeft, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, Search, Settings, Square, SquarePen, Star, TriangleAlert, User, UserCog, Video, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowLeft, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, Search, Settings, Square, SquarePen, Star, Tag, TriangleAlert, User, UserCog, Video, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useInboxLiveUpdates } from '@/hooks/use-inbox-live-updates';
 import { playReceivedMessageSound, playSentMessageSound } from '@/lib/notification-sounds';
 import {
+  CONVERSATION_STATUS_QUERY_KEY,
   CONVERSATION_ZONES_QUERY_KEY,
   CONVERSATIONS_QUERY_KEY,
   type Conversation,
   type ConversationThread,
   fetchConversations,
+  fetchConversationStatuses,
   fetchConversationZones,
   filterConversationThreads,
   groupConversationsByPhoneNumber,
@@ -33,6 +35,7 @@ import { NewChatDialog } from '@/components/new-chat-dialog';
 import { type StarredMessage } from '@/lib/starred-messages';
 import { getProfileStyle } from '@/lib/mock-profiles';
 import { getAssignableZones, MOCK_ZONE_OPTIONS } from '@/lib/mock-zones';
+import { ASSIGNABLE_STATUSES, type ChatStatus } from '@/lib/chat-status';
 
 // Funcionalidad "Vista previa de media": en vez del texto feo que genera
 // Kapso para el último mensaje cuando es una foto/video/audio/documento sin
@@ -55,6 +58,18 @@ const MEDIA_PREVIEW_LABEL: Partial<Record<string, string>> = {
   audio: 'Audio',
   document: 'Documento',
   sticker: 'Sticker',
+};
+
+// Funcionalidad "Estado del chat": un color por estado para que la
+// etiqueta se distinga de un vistazo en la lista — mismos tokens que ya usa
+// el resto de la app: "Nuevo" con el color de aviso (el mismo de "Sin
+// asignar" en el menú de perfil, llama la atención, necesita revisión),
+// "En proceso" con el acento de la app (mismo que el pill de zona),
+// "Cerrado" en gris apagado (ya no necesita atención).
+const STATUS_STYLE: Record<ChatStatus, string> = {
+  'Nuevo': 'bg-[var(--chat-warning-background)] text-[var(--chat-warning-foreground)]',
+  'En proceso': 'bg-primary/15 text-primary',
+  'Cerrado': 'bg-muted text-muted-foreground',
 };
 
 function isGeneratedMediaPreviewText(content: string): boolean {
@@ -424,6 +439,59 @@ export function ConversationList({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [zoneEditorThreadKey]);
+
+  // Funcionalidad "Estado del chat" (ver src/lib/chat-status.ts): mismo
+  // patrón que la zona de arriba, salvo que acá cualquier perfil logueado
+  // puede cambiarlo (no solo Administrador) — es una marca operativa del
+  // día a día, no una decisión de acceso.
+  const { data: statusMap = {} } = useQuery({
+    queryKey: CONVERSATION_STATUS_QUERY_KEY,
+    queryFn: fetchConversationStatuses,
+    refetchInterval: 30_000,
+  });
+
+  const [statusEditorThreadKey, setStatusEditorThreadKey] = useState<string | null>(null);
+  const [statusEditorPosition, setStatusEditorPosition] = useState<{ top: number; right: number } | null>(null);
+
+  const assignStatus = async (threadKey: string, estado: ChatStatus) => {
+    setStatusEditorThreadKey(null);
+    try {
+      const response = await fetch('/api/conversation-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadKey, estado }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'Failed to assign status');
+      }
+      queryClient.invalidateQueries({ queryKey: CONVERSATION_STATUS_QUERY_KEY });
+    } catch (error) {
+      console.error('No se pudo asignar el estado:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!statusEditorThreadKey) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target as HTMLElement).closest('[data-status-editor]')) {
+        setStatusEditorThreadKey(null);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setStatusEditorThreadKey(null);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [statusEditorThreadKey]);
 
   // En el instante en que el webhook registra un mensaje nuevo, actualiza la
   // vista previa de este chat directamente para que se refleje al instante
@@ -1504,6 +1572,10 @@ export function ConversationList({
               // undefined si todavía no tiene una asignada.
               const zone = zoneMap[thread.key];
 
+              // Estado de atención de este chat (ver src/lib/chat-status.ts)
+              // — "Nuevo" si todavía no tiene fila en la tabla.
+              const status: ChatStatus = (statusMap[thread.key] as ChatStatus | undefined) ?? 'Nuevo';
+
               return (
                 <div
                   key={thread.key}
@@ -1635,6 +1707,60 @@ export function ConversationList({
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     assignZone(thread.key, option);
+                                  }}
+                                  className={cn(
+                                    'flex h-8 w-full items-center justify-between gap-2 rounded px-2 text-left text-xs font-medium hover:bg-[var(--chat-hover)]',
+                                    isActive ? 'text-foreground' : 'text-muted-foreground',
+                                  )}
+                                >
+                                  <span className="truncate">{option}</span>
+                                  {isActive && <Check className="size-3.5 flex-shrink-0 text-primary" />}
+                                </button>
+                              );
+                            })}
+                          </div>,
+                          document.body
+                        )}
+
+                        {/* Píldora con el estado de atención de este chat
+                            (ver src/lib/chat-status.ts) — a diferencia de la
+                            zona, cualquier perfil logueado puede cambiarla,
+                            no solo Administrador. */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStatusEditorPosition({ top: e.clientY, right: window.innerWidth - e.clientX });
+                            setStatusEditorThreadKey(thread.key);
+                          }}
+                          className={cn(
+                            'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none hover:opacity-80',
+                            STATUS_STYLE[status],
+                          )}
+                        >
+                          <Tag className="size-2.5 flex-shrink-0" />
+                          <span className="truncate">{status}</span>
+                        </button>
+
+                        {statusEditorThreadKey === thread.key && statusEditorPosition && createPortal(
+                          <div
+                            role="menu"
+                            aria-label="Cambiar estado"
+                            data-status-editor
+                            style={{ position: 'fixed', top: statusEditorPosition.top, right: statusEditorPosition.right }}
+                            className="z-50 w-36 rounded-md border border-[var(--chat-border-strong)] bg-popover p-1 text-sm text-popover-foreground shadow-lg"
+                          >
+                            {ASSIGNABLE_STATUSES.map((option) => {
+                              const isActive = option === status;
+
+                              return (
+                                <button
+                                  key={option}
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    assignStatus(thread.key, option);
                                   }}
                                   className={cn(
                                     'flex h-8 w-full items-center justify-between gap-2 rounded px-2 text-left text-xs font-medium hover:bg-[var(--chat-hover)]',
