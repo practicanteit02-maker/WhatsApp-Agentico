@@ -60,16 +60,15 @@ const MEDIA_PREVIEW_LABEL: Partial<Record<string, string>> = {
   sticker: 'Sticker',
 };
 
-// Funcionalidad "Estado del chat": un color por estado para que la
-// etiqueta se distinga de un vistazo en la lista — mismos tokens que ya usa
-// el resto de la app: "Nuevo" con el mismo azul de --chat-check-read (el
-// tilde de "leído"), sobrio, sin usar el ámbar de aviso; "En proceso" con
-// el acento de la app (mismo que el pill de zona); "Cerrado" en gris
-// apagado (ya no necesita atención).
+// Funcionalidad "Estado del chat": los tres estados comparten el mismo
+// azul sobrio (--chat-new-background/--chat-new-foreground, la misma
+// familia que --chat-check-read, el tilde de "leído") — el texto de la
+// etiqueta es lo que distingue el estado, no el color.
+const STATUS_PILL_CLASS = 'bg-[var(--chat-new-background)] text-[var(--chat-new-foreground)]';
 const STATUS_STYLE: Record<ChatStatus, string> = {
-  'Nuevo': 'bg-[var(--chat-new-background)] text-[var(--chat-new-foreground)]',
-  'En proceso': 'bg-primary/15 text-primary',
-  'Cerrado': 'bg-muted text-muted-foreground',
+  'Nuevo': STATUS_PILL_CLASS,
+  'En proceso': STATUS_PILL_CLASS,
+  'Cerrado': STATUS_PILL_CLASS,
 };
 
 function isGeneratedMediaPreviewText(content: string): boolean {
