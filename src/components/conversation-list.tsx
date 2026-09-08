@@ -1584,12 +1584,12 @@ export function ConversationList({
                             className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-primary hover:bg-primary/25"
                           >
                             <MapPin className="size-2.5 flex-shrink-0" />
-                            <span className="truncate">{zone ?? 'Sin zona'}</span>
+                            {zone && <span className="truncate">{zone}</span>}
                           </button>
                         ) : (
                           <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-primary">
                             <MapPin className="size-2.5 flex-shrink-0" />
-                            <span className="truncate">{zone ?? 'Sin zona'}</span>
+                            {zone && <span className="truncate">{zone}</span>}
                           </span>
                         )}
 
