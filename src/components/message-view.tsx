@@ -27,6 +27,8 @@ import {
   Star,
   User,
   LayoutTemplate,
+  Bot,
+  BotOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInboxLiveUpdates } from "@/hooks/use-inbox-live-updates";
@@ -35,10 +37,12 @@ import { playSentMessageSound } from "@/lib/notification-sounds";
 import type { ChatCollabPayload, ChatPresenceState } from "@/lib/event-bus";
 import { getProfileStyle } from "@/lib/mock-profiles";
 import {
+  CHAT_AI_CONFIG_QUERY_KEY,
   CONVERSATIONS_QUERY_KEY,
   type Conversation,
   type Message,
   conversationMessagesQueryKey,
+  fetchChatAiConfig,
   fetchConversationMessages,
   normalizeMessages,
   parseTimestamp,
@@ -597,6 +601,45 @@ export function MessageView({
     [phoneNumberId, phoneNumber, businessScopedUserId],
   );
 
+  // Funcionalidad "IA por chat": si la IA responde automáticamente al abrir
+  // ESTE chat (ver src/lib/chat-ai-config.ts) — apagado por defecto, se
+  // prende/apaga a mano con el botón del header más abajo.
+  const { data: aiConfigMap = {} } = useQuery({
+    queryKey: CHAT_AI_CONFIG_QUERY_KEY,
+    queryFn: fetchChatAiConfig,
+    staleTime: 30_000,
+  });
+  const aiAutoReplyEnabledForThisChat = collabThreadKey
+    ? Boolean(aiConfigMap[collabThreadKey])
+    : false;
+  const [isTogglingAiEnabled, setIsTogglingAiEnabled] = useState(false);
+
+  const handleToggleAiEnabled = useCallback(async () => {
+    if (!collabThreadKey || isTogglingAiEnabled) return;
+
+    const nextEnabled = !aiAutoReplyEnabledForThisChat;
+    setIsTogglingAiEnabled(true);
+    try {
+      const response = await fetch("/api/chat-ai-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadKey: collabThreadKey, enabled: nextEnabled }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || "Failed to update chat AI config");
+      }
+      queryClient.setQueryData<Record<string, boolean>>(
+        CHAT_AI_CONFIG_QUERY_KEY,
+        (current) => ({ ...(current ?? {}), [collabThreadKey]: nextEnabled }),
+      );
+    } catch (error) {
+      console.error("Failed to toggle AI auto-reply for this chat:", error);
+    } finally {
+      setIsTogglingAiEnabled(false);
+    }
+  }, [aiAutoReplyEnabledForThisChat, collabThreadKey, isTogglingAiEnabled, queryClient]);
+
   const getScrollViewport = useCallback(() => {
     return (
       messagesContainerRef.current?.querySelector<HTMLElement>(
@@ -943,11 +986,14 @@ export function MessageView({
   // respuesta ahí mismo. No hace nada si la IA (o un humano) ya respondió,
   // ya que el último mensaje sería outbound para entonces.
   //
-  // Desactivada a pedido del usuario (respuestas automáticas de IA apagadas
-  // por ahora) — para volver a activarla, cambiar esta constante a `true`.
-  const AI_AUTO_REPLY_ENABLED = false;
+  // Funcionalidad "IA por chat": ahora depende del interruptor de ESTE chat
+  // (ver aiAutoReplyEnabledForThisChat más arriba) en vez de una constante
+  // global — antes estaba apagada para todos los chats a pedido del
+  // usuario; el endpoint también vuelve a chequear esto server-side (ver
+  // trigger-ai-reply/route.ts), así que este chequeo acá es solo para
+  // evitar el round-trip de red cuando ya sabemos que está apagada.
   useEffect(() => {
-    if (!AI_AUTO_REPLY_ENABLED) return;
+    if (!aiAutoReplyEnabledForThisChat) return;
     if (!isVisible || !phoneNumberId || !phoneNumber) return;
     if (messages.length === 0) return;
 
@@ -974,7 +1020,7 @@ export function MessageView({
         // Permite reintentar la próxima vez que se abra este chat.
         triggeredAutoReplyMessageIdsRef.current.delete(lastMessage.id);
       });
-  }, [isVisible, messages, phoneNumber, phoneNumberId, refetchThreadMessages]);
+  }, [aiAutoReplyEnabledForThisChat, isVisible, messages, phoneNumber, phoneNumberId, refetchThreadMessages]);
 
   useEffect(() => {
     try {
@@ -1686,6 +1732,30 @@ export function MessageView({
                   </div>
                 )}
               </div>
+            )}
+            {/* Funcionalidad "IA por chat": prende/apaga que la IA responda
+                automáticamente al abrir ESTE chat (ver
+                aiAutoReplyEnabledForThisChat y handleToggleAiEnabled más
+                arriba, y src/lib/chat-ai-config.ts). Apagado por defecto. */}
+            {collabThreadKey && (
+              <Button
+                onClick={handleToggleAiEnabled}
+                disabled={isTogglingAiEnabled}
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "size-11 text-muted-foreground hover:bg-[var(--chat-hover)] md:size-10",
+                  aiAutoReplyEnabledForThisChat && "text-primary",
+                )}
+                aria-label={aiAutoReplyEnabledForThisChat ? "Desactivar respuestas de IA en este chat" : "Activar respuestas de IA en este chat"}
+                title={aiAutoReplyEnabledForThisChat ? "IA activada en este chat" : "IA desactivada en este chat"}
+              >
+                {aiAutoReplyEnabledForThisChat ? (
+                  <Bot className="h-4 w-4" />
+                ) : (
+                  <BotOff className="h-4 w-4" />
+                )}
+              </Button>
             )}
             <Button
               onClick={handleRefresh}

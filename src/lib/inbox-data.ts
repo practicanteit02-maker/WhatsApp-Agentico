@@ -198,6 +198,23 @@ export async function fetchConversationZones(): Promise<Record<string, string>> 
   return data.zones || {};
 }
 
+export const CHAT_AI_CONFIG_QUERY_KEY = ['chat-ai-config'] as const;
+
+/** Funcionalidad "IA por chat": si la IA responde automáticamente al abrir
+ * ESE chat en particular (ver src/lib/chat-ai-config.ts) — mapa
+ * `{ [threadKey]: aiEnabled }`. Los chats sin fila todavía en la tabla no
+ * aparecen acá y se tratan como apagados (ver getAiEnabled). */
+export async function fetchChatAiConfig(): Promise<Record<string, boolean>> {
+  const response = await fetch('/api/chat-ai-config');
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to fetch chat AI config');
+  }
+
+  return data.config || {};
+}
+
 export async function fetchConversationMessages(conversationId: string, phoneNumberId?: string): Promise<Message[]> {
   const params = new URLSearchParams({ limit: '100' });
   if (phoneNumberId) {

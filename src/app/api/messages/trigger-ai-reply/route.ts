@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sendAutoReply } from '@/lib/auto-reply';
 import { checkZoneAccess } from '@/lib/conversation-zones';
+import { getAiEnabled } from '@/lib/chat-ai-config';
 import { threadKeyFor } from '@/lib/inbox-data';
 
 type TriggerAIReplyBody = {
@@ -36,6 +37,14 @@ export async function POST(request: Request) {
     const access = await checkZoneAccess(threadKey);
     if (!access.allowed) {
       return NextResponse.json({ error: access.error }, { status: access.status });
+    }
+
+    // Funcionalidad "IA por chat": interruptor por conversación (ver
+    // src/lib/chat-ai-config.ts) — apagado por defecto, hay que prenderlo a
+    // mano desde el chat. Sin esto, este disparador respondía siempre que
+    // se abría un chat con un inbound sin responder.
+    if (!(await getAiEnabled(threadKey))) {
+      return NextResponse.json({ sent: false, reason: 'ai-disabled' });
     }
 
     // messageId permite compartir el registro anti-duplicados del webhook
