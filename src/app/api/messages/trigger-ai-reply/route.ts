@@ -7,6 +7,14 @@ import { threadKeyFor } from '@/lib/inbox-data';
 type TriggerAIReplyBody = {
   phoneNumberId?: string;
   to?: string;
+  // Funcionalidad "Contactos con username (BSUID)": necesario para calcular
+  // el mismo threadKey que usa el resto de la app (ver el comentario junto
+  // a threadKeyFor en src/lib/inbox-data.ts) — sin esto, un chat con
+  // teléfono Y business_scoped_user_id calculaba acá un threadKey distinto
+  // al que arma el botón de src/components/message-view.tsx, que sí lo
+  // manda (message-view.tsx prioriza el BSUID sobre el teléfono cuando
+  // ambos existen).
+  businessScopedUserId?: string;
   incomingText?: string;
   messageId?: string;
   conversationId?: string;
@@ -24,7 +32,7 @@ type TriggerAIReplyBody = {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as TriggerAIReplyBody;
-    const { phoneNumberId, to, incomingText, messageId, conversationId } = body;
+    const { phoneNumberId, to, businessScopedUserId, incomingText, messageId, conversationId } = body;
 
     if (!phoneNumberId || !to || !incomingText) {
       return NextResponse.json(
@@ -33,7 +41,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const threadKey = threadKeyFor(phoneNumberId, to);
+    const threadKey = threadKeyFor(phoneNumberId, to, undefined, businessScopedUserId);
     const access = await checkZoneAccess(threadKey);
     if (!access.allowed) {
       return NextResponse.json({ error: access.error }, { status: access.status });

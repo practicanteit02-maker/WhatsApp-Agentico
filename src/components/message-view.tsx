@@ -1009,6 +1009,7 @@ export function MessageView({
       body: JSON.stringify({
         phoneNumberId,
         to: phoneNumber,
+        businessScopedUserId,
         incomingText: lastMessage.content,
         messageId: lastMessage.id,
         conversationId: lastMessage.conversationId,
@@ -1020,7 +1021,7 @@ export function MessageView({
         // Permite reintentar la próxima vez que se abra este chat.
         triggeredAutoReplyMessageIdsRef.current.delete(lastMessage.id);
       });
-  }, [aiAutoReplyEnabledForThisChat, isVisible, messages, phoneNumber, phoneNumberId, refetchThreadMessages]);
+  }, [aiAutoReplyEnabledForThisChat, businessScopedUserId, isVisible, messages, phoneNumber, phoneNumberId, refetchThreadMessages]);
 
   useEffect(() => {
     try {
