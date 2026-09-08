@@ -26,6 +26,11 @@ type Props = {
   conversationId?: string;
   phoneNumber?: string;
   phoneNumberId?: string;
+  // Funcionalidad "Contactos con username (BSUID)": necesario para que
+  // /api/messages/interactive calcule el mismo threadKey que el resto de la
+  // app al chequear la zona (ver el comentario junto a threadKeyFor en
+  // src/lib/inbox-data.ts).
+  businessScopedUserId?: string;
   onMessageSent?: () => void;
 };
 
@@ -35,6 +40,7 @@ export function InteractiveMessageDialog({
   conversationId,
   phoneNumber,
   phoneNumberId,
+  businessScopedUserId,
   onMessageSent,
 }: Props) {
   const [header, setHeader] = useState('');
@@ -105,6 +111,7 @@ export function InteractiveMessageDialog({
           conversationId,
           phoneNumber,
           phoneNumberId,
+          businessScopedUserId,
           header: header.trim() || undefined,
           body: body.trim(),
           buttons: buttons.map(btn => ({

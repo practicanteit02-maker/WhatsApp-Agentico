@@ -7,7 +7,7 @@ import { whatsappClient } from '@/lib/whatsapp-client';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { phoneNumber, header, body: bodyText, buttons, phoneNumberId: requestedPhoneNumberId } = body;
+    const { phoneNumber, businessScopedUserId, header, body: bodyText, buttons, phoneNumberId: requestedPhoneNumberId } = body;
     const configuredPhoneNumber = await resolvePhoneNumberContext(requestedPhoneNumberId);
     const phoneNumberId = configuredPhoneNumber.phone_number_id;
 
@@ -18,7 +18,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const threadKey = threadKeyFor(phoneNumberId, phoneNumber);
+    // Funcionalidad "Contactos con username (BSUID)": ver el comentario
+    // junto a ReactBody.businessScopedUserId en
+    // src/app/api/messages/react/route.ts — mismo bug, mismo arreglo.
+    const threadKey = threadKeyFor(phoneNumberId, phoneNumber, undefined, businessScopedUserId);
     const access = await checkZoneAccess(threadKey);
     if (!access.allowed) {
       return NextResponse.json({ error: access.error }, { status: access.status });

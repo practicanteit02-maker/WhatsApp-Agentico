@@ -741,7 +741,7 @@ export function MessageView({
       await fetch("/api/messages/react", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumberId, to: phoneNumber, messageId: message.id, emoji }),
+        body: JSON.stringify({ phoneNumberId, to: phoneNumber, businessScopedUserId, messageId: message.id, emoji }),
       });
     } catch (error) {
       console.error("Failed to send reaction:", error);
@@ -751,7 +751,7 @@ export function MessageView({
       // declaración de hooks en el archivo.
       queryClient.invalidateQueries({ queryKey: threadMessagesQueryKey });
     }
-  }, [phoneNumberId, phoneNumber, queryClient, threadMessagesQueryKey]);
+  }, [phoneNumberId, phoneNumber, businessScopedUserId, queryClient, threadMessagesQueryKey]);
 
   const handleCancelReply = useCallback(() => {
     setReplyingToMessage(null);
