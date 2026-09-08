@@ -123,6 +123,12 @@
   --chat-warning-background: hsl(38 92% 50% / 14%);
   --chat-warning-border: hsl(38 92% 50% / 35%);
   --chat-warning-foreground: hsl(30 80% 25%);
+  /* Funcionalidad "Estado del chat": mismo azul que --chat-check-read (el
+     tilde de "leído"), no un color nuevo — para la etiqueta "Nuevo" del
+     pill de estado en conversation-list.tsx, más sobrio que el ámbar de
+     aviso de arriba. */
+  --chat-new-background: hsl(200 74% 55% / 14%);
+  --chat-new-foreground: hsl(205 70% 32%);
   --chat-media-outline: rgb(0 0 0 / 10%);
 }
 
@@ -191,6 +197,8 @@
   --chat-warning-background: hsl(38 92% 55% / 14%);
   --chat-warning-border: hsl(38 92% 55% / 35%);
   --chat-warning-foreground: hsl(38 92% 75%);
+  --chat-new-background: hsl(200 74% 60% / 16%);
+  --chat-new-foreground: hsl(200 80% 72%);
   --chat-media-outline: hsl(0 0% 100% / 10%);
 }
 
