@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { emitInboxUpdate } from '@/lib/event-bus';
+import { getZone } from '@/lib/conversation-zones';
+import { threadKeyFor } from '@/lib/inbox-data';
+import { whatsappClient } from '@/lib/whatsapp-client';
 
 // --- Si los mensajes tardan en aparecer (varios segundos, en vez
 // de instantáneo) ---
@@ -95,6 +98,40 @@ function buildLiveMessageFromPayload(payload: InboundWebhookPayload) {
   };
 }
 
+/**
+ * Zona real del chat de este evento de webhook (ver src/lib/conversation-zones.ts),
+ * para que /api/events pueda decidir a qué conexiones SSE reenviarlo — ver
+ * el comentario de InboxUpdatePayload.zona en src/lib/event-bus.ts. El
+ * payload del webhook no siempre trae el teléfono/BSUID real del contacto
+ * (solo viene en buildLiveMessageFromPayload, y solo para mensajes de texto
+ * entrantes), así que acá se pide con conversations.get() — la misma
+ * consulta global por id que ya usa /api/messages/[conversationId] — para
+ * poder calcular el mismo threadKey que el resto de la app. Se resuelve una
+ * sola vez por evento (acá, en el productor), no una vez por cada conexión
+ * SSE abierta que lo reciba.
+ */
+async function resolveEventZona(payload: InboundWebhookPayload): Promise<string | undefined> {
+  const conversationId = payload.conversation?.id;
+  const phoneNumberId = payload.phone_number_id;
+  if (!conversationId || !phoneNumberId) {
+    return undefined;
+  }
+
+  try {
+    const conversationRecord = await whatsappClient.conversations.get({ conversationId });
+    const threadKey = threadKeyFor(
+      phoneNumberId,
+      typeof conversationRecord.phoneNumber === 'string' ? conversationRecord.phoneNumber : '',
+      conversationId,
+      typeof conversationRecord.businessScopedUserId === 'string' ? conversationRecord.businessScopedUserId : undefined
+    );
+    return await getZone(threadKey);
+  } catch (error) {
+    console.error('No se pudo resolver la zona del chat para el evento SSE:', error);
+    return undefined;
+  }
+}
+
 // Funcionalidad "Responder solo al abrir el chat": este webhook ya NO
 // responde automáticamente apenas llega un mensaje nuevo (eso vivía en una
 // función `autoReplyToInboundMessage` aquí mismo, ahora quitada) — a pedido
@@ -178,11 +215,14 @@ export async function POST(request: Request) {
       && payload.message?.kapso?.direction === 'inbound'
       && payload.message?.type === 'text';
 
+    const zona = await resolveEventZona(payload);
+
     emitInboxUpdate({
       reason: event === 'whatsapp.message.received' ? 'message.received' : 'message.status',
       phoneNumberId: payload.phone_number_id,
       conversationId: payload.conversation?.id,
       message: isInboundTextMessage ? buildLiveMessageFromPayload(payload) : undefined,
+      zona,
     });
 
     return NextResponse.json({ received: true });

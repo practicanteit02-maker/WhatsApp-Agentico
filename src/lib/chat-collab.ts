@@ -1,4 +1,5 @@
 import { emitChatCollabUpdate, type ChatPresenceState } from '@/lib/event-bus';
+import { getZone } from '@/lib/conversation-zones';
 
 /**
  * Funcionalidad "Quién está escribiendo": quién tiene texto sin mandar en
@@ -40,15 +41,20 @@ export function getState(threadKey: string): ChatPresenceState {
   return presence.get(threadKey) ?? EMPTY_PRESENCE;
 }
 
-export function setTyping(threadKey: string, profile: string) {
+export async function setTyping(threadKey: string, profile: string) {
   const next: ChatPresenceState = { typingBy: profile, typingUntil: Date.now() + TYPING_TTL_MS };
   presence.set(threadKey, next);
-  emitChatCollabUpdate({ threadKey, presence: next });
+  // Zona resuelta acá, una sola vez por evento (no una vez por cada
+  // conexión SSE abierta que lo reciba) — ver el comentario de
+  // ChatCollabPayload.zona en src/lib/event-bus.ts.
+  const zona = await getZone(threadKey);
+  emitChatCollabUpdate({ threadKey, presence: next, zona });
 }
 
-export function recordAttribution(threadKey: string, messageId: string, profile: string) {
+export async function recordAttribution(threadKey: string, messageId: string, profile: string) {
   attribution.set(messageId, profile);
-  emitChatCollabUpdate({ threadKey, attribution: { messageId, profile } });
+  const zona = await getZone(threadKey);
+  emitChatCollabUpdate({ threadKey, attribution: { messageId, profile }, zona });
 }
 
 export function getAttribution(messageIds: string[]): Record<string, string> {

@@ -45,13 +45,13 @@ export async function POST(request: Request) {
   switch (action) {
     case 'typing':
       if (!profile) return NextResponse.json({ error: 'Missing profile' }, { status: 400 });
-      chatCollab.setTyping(threadKey, profile);
+      await chatCollab.setTyping(threadKey, profile);
       break;
     case 'attribute':
       if (!profile || !messageId) {
         return NextResponse.json({ error: 'Missing profile or messageId' }, { status: 400 });
       }
-      chatCollab.recordAttribution(threadKey, messageId, profile);
+      await chatCollab.recordAttribution(threadKey, messageId, profile);
       break;
     default:
       return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

@@ -1,3 +1,4 @@
+import { auth } from '@/auth';
 import {
   CHAT_COLLAB_EVENT,
   INBOX_UPDATE_EVENT,
@@ -23,6 +24,22 @@ const HEARTBEAT_INTERVAL_MS = 25_000;
 export async function GET(request: Request) {
   const encoder = new TextEncoder();
 
+  // Control de acceso por zona: se lee la sesión una sola vez, al abrir la
+  // conexión (EventSource manda las cookies igual que cualquier fetch same-
+  // origin, así que auth() funciona igual que en el resto de los
+  // endpoints). Un Administrador recibe todo, como siempre. Cualquier otro
+  // perfil solo recibe los eventos cuya zona (ya resuelta por quien emite,
+  // ver src/lib/event-bus.ts) coincide con la suya — sin sesión o sin zona
+  // asignada, no recibe ninguno (falla cerrado).
+  const session = await auth();
+  const isAdmin = session?.user?.perfil === 'Administrador';
+  const sessionZona = session?.user?.zona;
+
+  function isVisibleToThisConnection(zona: string | undefined): boolean {
+    if (isAdmin) return true;
+    return Boolean(sessionZona) && zona === sessionZona;
+  }
+
   let onUpdate: (payload: InboxUpdatePayload) => void;
   let onCollabUpdate: (payload: ChatCollabPayload) => void;
   let heartbeat: ReturnType<typeof setInterval>;
@@ -39,12 +56,18 @@ export async function GET(request: Request) {
 
       send('ready', { ok: true });
 
-      onUpdate = (payload) => send('update', payload);
+      onUpdate = (payload) => {
+        if (!isVisibleToThisConnection(payload.zona)) return;
+        send('update', payload);
+      };
       inboxEventBus.on(INBOX_UPDATE_EVENT, onUpdate);
 
       // Funcionalidad "Candado de chat": mismo stream, un tipo de evento
       // aparte — ver src/lib/chat-collab.ts y el hook useInboxLiveUpdates.
-      onCollabUpdate = (payload) => send('collab', payload);
+      onCollabUpdate = (payload) => {
+        if (!isVisibleToThisConnection(payload.zona)) return;
+        send('collab', payload);
+      };
       inboxEventBus.on(CHAT_COLLAB_EVENT, onCollabUpdate);
 
       heartbeat = setInterval(() => {

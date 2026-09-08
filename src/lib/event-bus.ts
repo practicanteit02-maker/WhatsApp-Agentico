@@ -50,6 +50,17 @@ export type InboxUpdatePayload = {
    * un refetch en segundo plano después, para reconciliar.
    */
   message?: InboxLiveMessage;
+  /**
+   * Zona real del chat al que pertenece este evento (ver
+   * src/lib/conversation-zones.ts), ya resuelta por quien emite el evento
+   * (el webhook, en src/app/api/webhooks/whatsapp/route.ts) — se resuelve
+   * una sola vez acá, no una vez por cada conexión SSE abierta que lo
+   * reciba. /api/events la usa para decidir si reenviar o no este evento a
+   * una conexión de un perfil no-Administrador. `undefined` si no se pudo
+   * resolver (por ejemplo, un fallo consultando Kapso o Dynamo) — en ese
+   * caso /api/events no reenvía a no-Administradores (falla cerrado).
+   */
+  zona?: string;
 };
 
 export function emitInboxUpdate(payload: InboxUpdatePayload) {
@@ -76,6 +87,13 @@ export type ChatCollabPayload = {
   threadKey: string;
   presence?: ChatPresenceState;
   attribution?: { messageId: string; profile: string };
+  /**
+   * Igual que InboxUpdatePayload.zona (ver más arriba): la zona real del
+   * chat, resuelta una sola vez por quien emite el evento (src/lib/chat-collab.ts,
+   * que ya tiene el threadKey a mano) — no por cada conexión SSE que lo
+   * reciba.
+   */
+  zona?: string;
 };
 
 export function emitChatCollabUpdate(payload: ChatCollabPayload) {
