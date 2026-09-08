@@ -30,9 +30,15 @@ export default function Home() {
   // selector manual. Viven aquí (y no solo en ConversationList) porque
   // MessageView también necesita el perfil, para mostrar el nombre del
   // "remitente" en los mensajes que se envían (ver activeSenderName más
-  // abajo). "Sin asignar" es el valor mientras la sesión todavía está
-  // cargando, o si el correo no está en esa tabla.
-  const { data: session } = useSession();
+  // abajo). "Sin asignar" es el valor mientras la sesión ya cargó pero el
+  // correo no está en esa tabla — session.user.perfil/zona vienen undefined
+  // los dos únicos momentos: mientras useSession() todavía está resolviendo
+  // (status === 'loading') o si el correo no está en la tabla, así que no
+  // alcanza para distinguir "todavía no sé" de "ya sé que no tiene zona".
+  // sessionLoading (más abajo) sí distingue ese primer caso, para que
+  // ConversationList no confunda un "Sin asignar" transitorio con uno real.
+  const { data: session, status } = useSession();
+  const sessionLoading = status === 'loading';
   const sessionPerfil = session?.user?.perfil ?? 'Sin asignar';
   const sessionZona = session?.user?.zona ?? 'Sin asignar';
   // Funcionalidad "Nuevo chat": número recién ingresado en NewChatDialog,
@@ -121,6 +127,7 @@ export default function Home() {
         onOpenStarredMessage={handleOpenStarredMessage}
         sessionPerfil={sessionPerfil}
         sessionZona={sessionZona}
+        sessionLoading={sessionLoading}
         onOpenNewChat={handleOpenNewChat}
       />
       <div className="relative flex min-h-0 min-w-0 flex-1 md:overflow-hidden md:rounded-2xl md:border md:border-[var(--chat-border-strong)]">

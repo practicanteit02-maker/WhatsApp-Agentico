@@ -236,6 +236,14 @@ type Props = {
    * persona todavía no está cargado en esa tabla. */
   sessionPerfil?: string;
   sessionZona?: string;
+  /** true mientras src/app/page.tsx todavía no sabe si hay sesión (ver
+   * status de useSession() ahí) — sessionPerfil/sessionZona ya llegan como
+   * 'Sin asignar' en ese momento (mismo valor que un correo genuino sin
+   * fila en "usuarios-panel"), así que esta bandera es la única forma de
+   * distinguir "todavía no sé" de "ya sé que no tiene zona". La usa el
+   * efecto que sincroniza activeZone más abajo, para no fijarlo con ese
+   * valor transitorio antes de tiempo. */
+  sessionLoading?: boolean;
   /** Funcionalidad "Nuevo chat": se dispara al validar el número en
    * NewChatDialog — abre la vista de chat con ese número (ver
    * pendingNewChatRecipient en src/app/page.tsx). */
@@ -252,6 +260,7 @@ export function ConversationList({
   onOpenStarredMessage,
   sessionPerfil = 'Sin asignar',
   sessionZona = 'Sin asignar',
+  sessionLoading = false,
   onOpenNewChat,
 }: Props) {
   // Nombre real para el encabezado del menú de cuenta (ver más abajo) — el
@@ -303,11 +312,25 @@ export function ConversationList({
   // tiene sentido con otra zona distinta a la propia (el servidor ya le
   // manda solo los chats de su zona en /api/conversations) — se mantiene
   // siempre fijo en su sessionZona, sin depender de una elección manual.
+  // Mientras la sesión todavía está cargando (sessionLoading) no se toca
+  // activeZone para nada: sessionPerfil llega como 'Sin asignar' en ese
+  // momento (mismo valor transitorio que un correo genuino sin zona), y
+  // fijar activeZone con eso antes de tiempo lo dejaba atascado ahí para
+  // siempre — este efecto solo vuelve a correr cuando sessionPerfil o
+  // sessionZona cambian de valor, y una vez la sesión real carga y
+  // sessionPerfil pasa a ser 'Administrador', antes no había ninguna rama
+  // que lo corrigiera de vuelta a "Todos mis números" (ver la rama de
+  // abajo, que sí lo hace).
   useEffect(() => {
-    if (sessionPerfil !== 'Administrador') {
-      setActiveZone(sessionZona);
+    if (sessionLoading) return;
+
+    if (sessionPerfil === 'Administrador') {
+      setActiveZone(MOCK_ZONE_OPTIONS[0]);
+      return;
     }
-  }, [sessionPerfil, sessionZona]);
+
+    setActiveZone(sessionZona);
+  }, [sessionLoading, sessionPerfil, sessionZona]);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const zoneMenuRef = useRef<HTMLDivElement>(null);
   const overflowMenuRef = useRef<HTMLDivElement>(null);
