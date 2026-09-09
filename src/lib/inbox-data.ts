@@ -104,32 +104,12 @@ export function parseTimestamp(timestamp?: string): number {
   return Number.isFinite(time) ? time : 0;
 }
 
-/** Antepone "+" a un número que llega solo con dígitos (formato crudo de
- * Kapso) — usado tanto para el "via ..." de la cabecera del chat abierto
- * (message-view.tsx) como para las etiquetas del popup de "Detectar
- * contacto en varios números" (conversation-list.tsx). */
-export function formatDisplayPhoneNumber(phoneNumber?: string): string | null {
-  if (!phoneNumber) return null;
-
-  const trimmedPhoneNumber = phoneNumber.trim();
-  if (!trimmedPhoneNumber) return null;
-  if (trimmedPhoneNumber.startsWith('+')) return trimmedPhoneNumber;
-  if (/^\d+$/.test(trimmedPhoneNumber)) return `+${trimmedPhoneNumber}`;
-
-  return trimmedPhoneNumber;
-}
-
-/**
- * Identidad del CONTACTO real, sin el número de WhatsApp de la empresa —
- * la parte de threadKeyFor (abajo) que agrupa "es la misma persona",
- * separada para poder agruparla también ACROSS distintos números de la
- * empresa (funcionalidad "Detectar contacto en varios números": ver
- * contactSiblingsMap en conversation-list.tsx). Devuelve `undefined`
- * cuando no hay teléfono real ni business_scoped_user_id — ese caso
- * (contacto identificado solo por el id de una conversación puntual, ver
- * el comentario de threadKeyFor) no tiene ninguna identidad confiable para
- * cruzar con otro número de la empresa, así que esos chats quedan afuera
- * de esa funcionalidad a propósito.
+/** La misma clave de agrupación bajo la que se guarda/busca un chat,
+ * calculable con solo un número de teléfono + id de número de teléfono (no
+ * hace falta el objeto Conversation completo) — permite que un componente
+ * que solo tiene esas dos props (por ejemplo la vista del chat abierto) se
+ * refiera a "este chat" en localStorage de la misma forma que la lista de
+ * conversaciones.
  *
  * Funcionalidad "Contactos con username (BSUID)": cuando hay
  * `businessScopedUserId`, tiene prioridad sobre el número de teléfono (no al
@@ -139,25 +119,9 @@ export function formatDisplayPhoneNumber(phoneNumber?: string): string | null {
  * que conversaciones más viejas del mismo contacto se quedan sin número. El
  * business_scoped_user_id es el único dato que se mantiene igual en todas
  * esas conversaciones — agrupar por el número (cuando a veces está y a veces
- * no) partía a este mismo contacto en chats separados.
- */
-export function contactKeyFor(phoneNumber: string, businessScopedUserId?: string): string | undefined {
-  const trimmedPhoneNumber = phoneNumber.trim();
-  const comparablePhoneNumber = trimmedPhoneNumber.replace(/\D/g, '');
-  return (businessScopedUserId?.trim() ? `bsuid:${businessScopedUserId.trim()}` : undefined)
-    || comparablePhoneNumber
-    || trimmedPhoneNumber
-    || undefined;
-}
-
-/** La misma clave de agrupación bajo la que se guarda/busca un chat,
- * calculable con solo un número de teléfono + id de número de teléfono (no
- * hace falta el objeto Conversation completo) — permite que un componente
- * que solo tiene esas dos props (por ejemplo la vista del chat abierto) se
- * refiera a "este chat" en localStorage de la misma forma que la lista de
- * conversaciones. `fallbackId` (el id de una conversación puntual) queda
- * como último recurso, solo para contactos sin número NI
- * business_scoped_user_id (ver contactKeyFor arriba).
+ * no) partía a este mismo contacto en chats separados. `fallbackId` (el id
+ * de una conversación puntual) queda como último recurso, solo para
+ * contactos sin número NI business_scoped_user_id.
  */
 export function threadKeyFor(
   phoneNumberId: string,
@@ -165,7 +129,12 @@ export function threadKeyFor(
   fallbackId?: string,
   businessScopedUserId?: string,
 ): string {
-  const contactKey = contactKeyFor(phoneNumber, businessScopedUserId) ?? `conversation:${fallbackId ?? ''}`;
+  const trimmedPhoneNumber = phoneNumber.trim();
+  const comparablePhoneNumber = trimmedPhoneNumber.replace(/\D/g, '');
+  const contactKey = (businessScopedUserId?.trim() ? `bsuid:${businessScopedUserId.trim()}` : undefined)
+    || comparablePhoneNumber
+    || trimmedPhoneNumber
+    || `conversation:${fallbackId ?? ''}`;
   return `${phoneNumberId}:${contactKey}`;
 }
 
