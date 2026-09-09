@@ -232,6 +232,28 @@ export async function fetchConversationStatuses(): Promise<Record<string, string
   return data.statuses || {};
 }
 
+export const QUICK_REPLIES_QUERY_KEY = ['quick-replies'] as const;
+
+export type QuickReply = { atajo: string; mensaje: string };
+
+/** Funcionalidad "Respuestas rápidas": lista de atajos de texto fijo (ver
+ * src/lib/quick-replies.ts) para insertar rápido en el chat escribiendo
+ * "/" — ver el comentario junto al campo de texto en message-view.tsx.
+ * Mismo query key tanto acá como en quick-reply-manager.tsx, para que
+ * crear/editar/borrar un atajo desde la pantalla de gestión invalide (y
+ * refresque) el menú "/" de cualquier chat abierto, sin importar en qué
+ * pestaña/ruta se hizo el cambio. */
+export async function fetchQuickReplies(): Promise<QuickReply[]> {
+  const response = await fetch('/api/respuestas-rapidas');
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to fetch quick replies');
+  }
+
+  return data.quickReplies || [];
+}
+
 export async function fetchConversationMessages(conversationId: string, phoneNumberId?: string): Promise<Message[]> {
   const params = new URLSearchParams({ limit: '100' });
   if (phoneNumberId) {

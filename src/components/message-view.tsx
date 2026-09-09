@@ -29,6 +29,7 @@ import {
   LayoutTemplate,
   Bot,
   BotOff,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInboxLiveUpdates } from "@/hooks/use-inbox-live-updates";
@@ -40,11 +41,13 @@ import { getProfileStyle } from "@/lib/mock-profiles";
 import {
   CHAT_AI_CONFIG_QUERY_KEY,
   CONVERSATIONS_QUERY_KEY,
+  QUICK_REPLIES_QUERY_KEY,
   type Conversation,
   type Message,
   conversationMessagesQueryKey,
   fetchChatAiConfig,
   fetchConversationMessages,
+  fetchQuickReplies,
   normalizeMessages,
   parseTimestamp,
   phoneThreadMessagesQueryKey,
@@ -621,6 +624,41 @@ export function MessageView({
     ? Boolean(aiConfigMap[collabThreadKey])
     : false;
   const [isTogglingAiEnabled, setIsTogglingAiEnabled] = useState(false);
+
+  // Funcionalidad "Respuestas rápidas": lista de atajos de texto fijo (ver
+  // src/lib/quick-replies.ts) para el menú que aparece al escribir "/" en
+  // el campo de mensaje (ver el Input del compositor más abajo). Solo se
+  // pide si el rol puede escribir — para QA ni tiene sentido pedirla
+  // (/api/respuestas-rapidas la rechazaría con 403 igual).
+  const { data: quickReplies = [] } = useQuery({
+    queryKey: QUICK_REPLIES_QUERY_KEY,
+    queryFn: fetchQuickReplies,
+    enabled: canEscribir,
+    staleTime: 30_000,
+  });
+
+  // El menú "/" se activa cuando TODO el campo de mensaje empieza con "/"
+  // (no en medio de una frase) — mismo criterio simple que un comando de
+  // Slack. Se autogestiona: en cuanto se elige un atajo (o se borra la
+  // "/"), messageInput deja de empezar con "/" y el menú desaparece solo,
+  // sin necesitar un estado de abierto/cerrado aparte ni un cierre por
+  // clic afuera.
+  const quickReplyQuery = canEscribir && messageInput.startsWith("/")
+    ? messageInput.slice(1).toLowerCase()
+    : null;
+  const quickReplyMatches = useMemo(() => {
+    if (quickReplyQuery === null) return [];
+    return quickReplies.filter((quickReply) => quickReply.atajo.toLowerCase().startsWith(quickReplyQuery));
+  }, [quickReplies, quickReplyQuery]);
+
+  const handleSelectQuickReply = (mensaje: string) => {
+    setMessageInput(mensaje);
+    requestAnimationFrame(() => {
+      const input = messageInputRef.current;
+      input?.focus();
+      input?.setSelectionRange(mensaje.length, mensaje.length);
+    });
+  };
 
   const handleToggleAiEnabled = useCallback(async () => {
     if (!collabThreadKey || isTogglingAiEnabled) return;
@@ -2431,32 +2469,80 @@ export function MessageView({
                   </div>
                 )}
               </div>
-              <Input
-                ref={messageInputRef}
-                type="text"
-                value={messageInput}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setMessageInput(value);
-                  // Funcionalidad "Quién está escribiendo": cada tecleo
-                  // empuja el aviso para que lo vean los demás — puramente
-                  // informativo, no hace falta pedir nada para escribir.
-                  if (presenceEnabled && collabThreadKey && activeSenderName && value.trim()) {
-                    postCollabAction(collabThreadKey, "typing", { profile: activeSenderName });
-                  }
-                }}
-                placeholder={canEscribir ? "Type a message" : `Tu rol (${perfil}) no tiene permiso para responder`}
-                // Nunca se deshabilita por `sending` a propósito: los envíos
-                // de texto son optimistas (burbuja instantánea, compositor
-                // limpio), así que el usuario debería poder seguir
-                // escribiendo y dándole Enter uno tras otro sin que el campo
-                // se congele/pierda el foco a mitad del envío. La única
-                // razón real para deshabilitarlo es el permiso RBAC.
-                disabled={!canEscribir}
-                aria-label="Message"
-                title={canEscribir ? undefined : `Tu rol (${perfil}) no tiene permiso para responder`}
-                className="h-11 min-w-0 flex-1 rounded-lg border-[var(--chat-border-strong)] bg-[var(--chat-input)] text-base focus-visible:ring-primary md:h-10 md:text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              />
+              <div className="relative min-w-0 flex-1">
+                {/* Funcionalidad "Respuestas rápidas": menú flotante que
+                    aparece mientras messageInput empieza con "/" (ver
+                    quickReplyQuery más arriba) — mismo estilo de overlay
+                    que el selector de emoji, pero anclado a este campo en
+                    vez de a un botón aparte. */}
+                {quickReplyQuery !== null && (
+                  <div
+                    role="menu"
+                    aria-label="Respuestas rápidas"
+                    className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 max-h-60 w-full max-w-sm overflow-y-auto rounded-lg border border-[var(--chat-border-strong)] bg-popover p-1 shadow-lg"
+                  >
+                    {quickReplyMatches.length === 0 ? (
+                      <p className="px-2 py-2 text-xs text-muted-foreground">
+                        Ningún atajo coincide con “/{quickReplyQuery}”.
+                      </p>
+                    ) : (
+                      quickReplyMatches.map((quickReply) => (
+                        <button
+                          key={quickReply.atajo}
+                          type="button"
+                          role="menuitem"
+                          onClick={() => handleSelectQuickReply(quickReply.mensaje)}
+                          className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--chat-hover)]"
+                        >
+                          <Zap className="mt-0.5 size-3.5 flex-shrink-0 text-[var(--chat-presence)]" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-semibold text-foreground">/{quickReply.atajo}</span>
+                            <span className="block truncate text-xs text-muted-foreground">{quickReply.mensaje}</span>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+                <Input
+                  ref={messageInputRef}
+                  type="text"
+                  value={messageInput}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setMessageInput(value);
+                    // Funcionalidad "Quién está escribiendo": cada tecleo
+                    // empuja el aviso para que lo vean los demás — puramente
+                    // informativo, no hace falta pedir nada para escribir.
+                    if (presenceEnabled && collabThreadKey && activeSenderName && value.trim()) {
+                      postCollabAction(collabThreadKey, "typing", { profile: activeSenderName });
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    // Funcionalidad "Respuestas rápidas": con el menú
+                    // abierto y al menos una coincidencia, Enter inserta el
+                    // primer atajo en vez de mandar el mensaje — igual que
+                    // Slack/WhatsApp Business. Sin coincidencias, Enter se
+                    // comporta normal (manda el "/algo" tal cual, por si de
+                    // verdad era el mensaje que querían escribir).
+                    if (e.key === "Enter" && quickReplyMatches.length > 0) {
+                      e.preventDefault();
+                      handleSelectQuickReply(quickReplyMatches[0].mensaje);
+                    }
+                  }}
+                  placeholder={canEscribir ? "Type a message" : `Tu rol (${perfil}) no tiene permiso para responder`}
+                  // Nunca se deshabilita por `sending` a propósito: los envíos
+                  // de texto son optimistas (burbuja instantánea, compositor
+                  // limpio), así que el usuario debería poder seguir
+                  // escribiendo y dándole Enter uno tras otro sin que el campo
+                  // se congele/pierda el foco a mitad del envío. La única
+                  // razón real para deshabilitarlo es el permiso RBAC.
+                  disabled={!canEscribir}
+                  aria-label="Message"
+                  title={canEscribir ? undefined : `Tu rol (${perfil}) no tiene permiso para responder`}
+                  className="h-11 w-full rounded-lg border-[var(--chat-border-strong)] bg-[var(--chat-input)] text-base focus-visible:ring-primary md:h-10 md:text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
               <Button
                 type="submit"
                 // Antes solo se condicionaba a `sending` para subidas de
