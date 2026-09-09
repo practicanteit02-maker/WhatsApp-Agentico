@@ -11,7 +11,7 @@
 // src/lib/permissions.ts) — se reexportan como MOCK_ACCOUNT_PROFILES en vez
 // de definirse de nuevo acá para que no haya dos listas de roles que puedan
 // desincronizarse.
-import { ROLES, type Rol } from '@/lib/permissions';
+import { normalizarRol, ROLES, type Rol } from '@/lib/permissions';
 
 export const MOCK_ACCOUNT_PROFILES = ROLES;
 
@@ -27,6 +27,11 @@ const PROFILE_STYLES: Record<MockAccountProfile, ProfileStyle> = {
 
 const FALLBACK_STYLE: ProfileStyle = { initial: '?', color: 'var(--muted-foreground)' };
 
+// Pasa por normalizarRol() (en vez de indexar PROFILE_STYLES directo) para
+// que una variante como "Coordinador" (ver ALIAS_ROLES en permissions.ts)
+// reciba exactamente el mismo color/inicial que "Coordinadora" — no una
+// entrada aparte ni el estilo gris de "rol desconocido".
 export function getProfileStyle(profile: string): ProfileStyle {
-  return PROFILE_STYLES[profile as MockAccountProfile] ?? FALLBACK_STYLE;
+  const rol = normalizarRol(profile);
+  return rol ? PROFILE_STYLES[rol] : FALLBACK_STYLE;
 }

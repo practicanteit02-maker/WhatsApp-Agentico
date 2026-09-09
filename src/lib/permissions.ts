@@ -40,17 +40,45 @@ const MATRIZ_PERMISOS: Record<Rol, Record<Accion, boolean>> = {
   QA: { leer: true, escribir: false, editar: false, eliminar: false },
 };
 
-function esRolValido(perfil: string): perfil is Rol {
-  return (ROLES as readonly string[]).includes(perfil);
+/**
+ * Variantes de escritura que deben resolver exactamente al mismo rol
+ * canónico de ROLES — "Coordinador" (masculino) además de "Coordinadora",
+ * y "Administradora" (femenino) además de "Administrador", porque en la
+ * tabla usuarios-panel de DynamoDB puede haber quedado guardada cualquiera
+ * de las dos según quién la haya tipeado, y no hace falta renombrar datos
+ * existentes para que el sistema de permisos los reconozca. ROLES se queda
+ * con una sola forma canónica por rol a propósito (es lo que ve el
+ * selector de perfil en user-manager.tsx al crear una cuenta nueva — no
+ * tiene sentido ofrecer dos ortografías del mismo rol ahí), así que un
+ * alias nuevo se agrega acá, nunca en ROLES.
+ */
+const ALIAS_ROLES: Record<string, Rol> = {
+  Coordinador: 'Coordinadora',
+  Administradora: 'Administrador',
+};
+
+/** Resuelve cualquier variante aceptada (la forma canónica de ROLES, o un
+ * alias de ALIAS_ROLES) a su rol canónico — o undefined si no es un rol
+ * reconocido. Único punto donde se comparan ambas listas; puedeSePuede(),
+ * accionesPermitidas() y getProfileStyle() (ver mock-profiles.ts) pasan
+ * todas por acá para no repetir esta lógica. */
+export function normalizarRol(perfil: string): Rol | undefined {
+  if ((ROLES as readonly string[]).includes(perfil)) return perfil as Rol;
+  return ALIAS_ROLES[perfil];
 }
 
-/** ¿Este rol puede hacer esta acción? Un perfil que no sea uno de ROLES
- * (sin asignar, o un perfil viejo que ya no existe) no tiene ningún
- * permiso — el valor por defecto es siempre el más restrictivo, nunca el
- * más permisivo. */
+export function esRolValido(perfil: string): boolean {
+  return normalizarRol(perfil) !== undefined;
+}
+
+/** ¿Este rol puede hacer esta acción? Un perfil que no sea uno de ROLES ni
+ * uno de sus alias (sin asignar, o un perfil viejo que ya no existe) no
+ * tiene ningún permiso — el valor por defecto es siempre el más
+ * restrictivo, nunca el más permisivo. */
 export function puedeSePuede(perfil: string, accion: Accion): boolean {
-  if (!esRolValido(perfil)) return false;
-  return MATRIZ_PERMISOS[perfil][accion];
+  const rol = normalizarRol(perfil);
+  if (!rol) return false;
+  return MATRIZ_PERMISOS[rol][accion];
 }
 
 /** Todo lo que este rol puede hacer de una — útil para la UI cuando
@@ -60,16 +88,20 @@ export function accionesPermitidas(perfil: string): Accion[] {
 }
 
 /**
- * Único lugar del proyecto donde se compara un perfil contra el literal
- * 'Administrador'. Se usa para el puñado de comportamientos que no son
- * exactamente una Accion de la matriz de arriba, pero que hoy dependen de
- * "es Administrador" — el filtro de zona que le muestra todas las
- * conversaciones sin importar su zona asignada (ver checkZoneAccess en
- * conversation-zones.ts, /api/events, /api/conversations) y el selector de
- * "ver todos los números" del header (conversation-list.tsx). No reemplaza
- * a puedeSePuede(): esas pantallas no están preguntando "¿puede escribir?"
+ * Único lugar del proyecto que decide "¿es este el rol Administrador?" —
+ * pasa por normalizarRol() (en vez de comparar contra el literal
+ * 'Administrador' a mano) para que "Administradora" cuente exactamente
+ * igual, mismo criterio que el resto de los alias de ALIAS_ROLES. Se usa
+ * para el puñado de comportamientos que no son exactamente una Accion de
+ * la matriz de arriba, pero que hoy dependen de "es Administrador" — el
+ * filtro de zona que le muestra todas las conversaciones sin importar su
+ * zona asignada (ver checkZoneAccess en conversation-zones.ts,
+ * /api/events, /api/conversations) y el selector de "ver todos los
+ * números" del header (conversation-list.tsx). No reemplaza a
+ * puedeSePuede(): esas pantallas no están preguntando "¿puede escribir?"
  * sino "¿tiene acceso sin restricción de zona?", una pregunta distinta.
  */
 export function esAdministrador(perfil: string | undefined | null): boolean {
-  return perfil === 'Administrador';
+  if (!perfil) return false;
+  return normalizarRol(perfil) === 'Administrador';
 }

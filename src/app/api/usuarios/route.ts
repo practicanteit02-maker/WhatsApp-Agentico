@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { deleteUser, getAllUsers, getUser, setUser } from '@/lib/panel-users';
-import { MOCK_ACCOUNT_PROFILES } from '@/lib/mock-profiles';
+import { esRolValido } from '@/lib/permissions';
 import { isAssignableZone } from '@/lib/mock-zones';
 
 /**
@@ -32,7 +32,13 @@ function validateBody(body: { correo?: string; perfil?: string; zona?: string } 
   if (!correo || !EMAIL_PATTERN.test(correo)) {
     return { error: 'Correo inválido' };
   }
-  if (!perfil || !(MOCK_ACCOUNT_PROFILES as readonly string[]).includes(perfil)) {
+  // esRolValido() (en vez de comparar contra la lista canónica de
+  // MOCK_ACCOUNT_PROFILES/ROLES a mano) acepta también variantes como
+  // "Coordinador" (ver ALIAS_ROLES en src/lib/permissions.ts) — sin esto,
+  // editar la zona de un usuario que ya tuviera esa variante guardada en
+  // DynamoDB fallaba acá con "Perfil inválido", aunque el sistema de
+  // permisos la reconociera perfectamente bien en el resto de la app.
+  if (!perfil || !esRolValido(perfil)) {
     return { error: `Perfil inválido: ${perfil}` };
   }
   if (zona && !isAssignableZone(zona)) {
