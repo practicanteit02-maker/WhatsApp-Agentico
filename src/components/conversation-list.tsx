@@ -1830,21 +1830,43 @@ export function ConversationList({
                           </span>
                         )}
 
-                        {unreadCount > 0 ? (
-                          <span
-                            className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold tabular-nums text-primary-foreground"
-                            aria-label={`${unreadCount} unread messages`}
-                          >
-                            {unreadCount > 99 ? '99+' : unreadCount}
-                          </span>
-                        ) : isMarkedUnread && (
-                          // Marcado manualmente como no leído sin mensajes nuevos
-                          // reales: solo un punto, nunca un número inventado.
-                          <span
-                            className="size-[10px] rounded-full bg-primary"
-                            aria-label="Marked as unread"
-                          />
-                        )}
+                        {/* Slot de altura fija (18px, la del badge numérico)
+                            para el indicador de "no leído" — SIEMPRE ocupa su
+                            lugar en la columna apilada, tenga o no contenido
+                            visible. Antes esto se condicionaba por completo
+                            (sin nada en el caso "sin no leídos"), así que la
+                            columna derecha pasaba de 3 a 4 filas apiladas
+                            justo cuando llegaba un mensaje nuevo — como la
+                            fila solo tiene un mínimo de altura (min-h-[68px],
+                            no un techo), la tarjeta entera crecía para
+                            acomodar esa 4ª fila mientras el resto se quedaba
+                            más baja, inconsistente. */}
+                        <div className="flex h-[18px] items-center justify-center">
+                          {unreadCount > 0 ? (
+                            <span
+                              className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold tabular-nums text-primary-foreground"
+                              aria-label={`${unreadCount} unread messages`}
+                            >
+                              {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
+                          ) : isMarkedUnread ? (
+                            // Marcado manualmente como no leído sin mensajes
+                            // nuevos reales: solo un punto, nunca un número
+                            // inventado.
+                            <span
+                              className="size-[10px] rounded-full bg-primary"
+                              aria-label="Marked as unread"
+                            />
+                          ) : (
+                            // Nada que mostrar — el placeholder tiene el
+                            // mismo tamaño que el badge real (arriba), solo
+                            // que invisible, para que el slot no colapse.
+                            <span
+                              className="h-[18px] min-w-[18px] rounded-full opacity-0"
+                              aria-hidden="true"
+                            />
+                          )}
+                        </div>
 
                         {openRowMenuKey === thread.key && rowMenuPosition && createPortal(
                           <div
