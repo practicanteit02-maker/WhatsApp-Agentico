@@ -1,20 +1,22 @@
 import { NextResponse } from 'next/server';
 import { checkZoneAccess } from '@/lib/conversation-zones';
-import { getAllConversationTags, setConversationTag } from '@/lib/tags';
+import { deleteConversationTag, getAllConversationTags, setConversationTag } from '@/lib/tags';
 import { requierePermiso } from '@/lib/require-permission';
 
 const MAX_TAG_LENGTH = 40;
 
 /**
  * Etiqueta asignada a cada chat (ver src/lib/tags.ts) — texto libre, sin
- * catálogo predefinido. GET requiere estar logueado con un rol válido
- * (permiso "leer") — ver qué etiqueta tiene YA asignada un chat puntual es
- * lectura normal, igual que zona/estado. POST ("escribir/editar la
- * etiqueta") requiere "escribir" — a pedido explícito, NO "editar" (que hoy
- * es exclusivo de Administrador y solo aplica a zona/estado) — y además
- * pasa por checkZoneAccess, el mismo control que protege el resto de los
- * endpoints de un chat puntual: un no-Administrador solo puede etiquetar un
- * chat de su propia zona.
+ * catálogo predefinido, que se pone/edita/quita desde el menú de clic
+ * derecho de cada tarjeta en conversation-list.tsx (no hay un pill visible
+ * en la lista). GET requiere estar logueado con un rol válido (permiso
+ * "leer") — ver qué etiqueta tiene YA asignada un chat puntual es lectura
+ * normal, igual que zona/estado. POST ("poner/editar la etiqueta") y DELETE
+ * ("quitar la etiqueta") requieren "escribir" — a pedido explícito, NO
+ * "editar" (que hoy es exclusivo de Administrador y solo aplica a
+ * zona/estado) — y además pasan por checkZoneAccess, el mismo control que
+ * protege el resto de los endpoints de un chat puntual: un no-Administrador
+ * solo puede etiquetar un chat de su propia zona.
  */
 export async function GET() {
   const denegado = await requierePermiso('leer');
@@ -47,5 +49,24 @@ export async function POST(request: Request) {
   }
 
   await setConversationTag(body.threadKey, etiqueta);
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(request: Request) {
+  const denegado = await requierePermiso('escribir');
+  if (denegado) return denegado;
+
+  const { searchParams } = new URL(request.url);
+  const threadKey = searchParams.get('threadKey');
+  if (!threadKey) {
+    return NextResponse.json({ error: 'Missing threadKey' }, { status: 400 });
+  }
+
+  const access = await checkZoneAccess(threadKey);
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
+
+  await deleteConversationTag(threadKey);
   return NextResponse.json({ ok: true });
 }

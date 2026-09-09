@@ -1,5 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 /**
  * Funcionalidad "Etiquetar Perfiles": una etiqueta de texto libre por
@@ -68,5 +68,13 @@ export async function getAllConversationTags(): Promise<Record<string, string>> 
 export async function setConversationTag(threadKey: string, etiqueta: string): Promise<void> {
   await dynamoClient.send(
     new PutCommand({ TableName: CONVERSATION_TAG_TABLE, Item: { threadKey, etiqueta } })
+  );
+}
+
+/** "Quitar etiqueta" — borra la fila entera (a diferencia de guardar una
+ * etiqueta vacía, que /api/conversation-tag rechaza). */
+export async function deleteConversationTag(threadKey: string): Promise<void> {
+  await dynamoClient.send(
+    new DeleteCommand({ TableName: CONVERSATION_TAG_TABLE, Key: { threadKey } })
   );
 }
