@@ -1784,9 +1784,27 @@ export function ConversationList({
                     </div>
                     <div className="flex min-w-0 flex-1 items-start justify-between gap-2 overflow-hidden">
                       <div className="min-w-0 flex-1 overflow-hidden">
-                        <p className="truncate text-sm font-semibold leading-5 text-foreground">
-                          {thread.contactName || thread.phoneNumber || 'Unknown phone number'}
-                        </p>
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <span className="min-w-0 truncate text-sm font-semibold leading-5 text-foreground">
+                            {thread.contactName || thread.phoneNumber || 'Unknown phone number'}
+                          </span>
+                          {/* Funcionalidad "Etiquetar Perfiles": texto de la
+                              etiqueta de este chat (ver src/lib/tags.ts),
+                              puramente informativo — sin onClick, sin
+                              popover. Gestionarla (poner/editar/quitar)
+                              sigue viviendo exclusivamente en el menú de
+                              clic derecho (ver data-row-menu más abajo). Se
+                              omite por completo si el chat no tiene
+                              etiqueta asignada (ni ícono ni placeholder).
+                              Gris neutro a propósito, para no confundirse
+                              con el pill de zona/estado (bg-primary/15) ni
+                              con el badge rojo de Administrador. */}
+                          {etiqueta && (
+                            <span className="max-w-[6rem] flex-shrink-0 truncate rounded-full bg-[var(--chat-hover)] px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">
+                              {etiqueta}
+                            </span>
+                          )}
+                        </div>
                         {thread.lastMessage && (
                           <p className="mt-1 flex items-center gap-1 truncate text-xs leading-4 text-muted-foreground">
                             {thread.lastMessage.direction === 'outbound' && (
