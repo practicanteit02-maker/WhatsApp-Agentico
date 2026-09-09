@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { format, isToday, isValid, isYesterday } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { signOut, useSession } from 'next-auth/react';
-import { Archive, ArchiveRestore, ArrowLeft, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, Search, Settings, Square, SquarePen, Star, Tag, TriangleAlert, User, UserCog, Video, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowLeft, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, Search, Settings, Square, SquarePen, Star, Tag, TriangleAlert, User, UserCog, Users, Video, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useInboxLiveUpdates } from '@/hooks/use-inbox-live-updates';
 import type { ChatCollabPayload } from '@/lib/event-bus';
@@ -1911,6 +1911,20 @@ export function ConversationList({
             <LayoutTemplate className="size-5" />
           </Link>
         </Button>
+        {sessionPerfil === 'Administrador' && (
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="size-11 rounded-md border border-[var(--chat-border-strong)] text-muted-foreground hover:bg-[var(--chat-hover)] hover:text-foreground md:size-10"
+            aria-label="Usuarios"
+            title="Usuarios"
+          >
+            <Link href="/usuarios">
+              <Users className="size-5" />
+            </Link>
+          </Button>
+        )}
         <ThemeToggle
           className="size-11 rounded-md border border-[var(--chat-border-strong)] text-muted-foreground md:size-10"
           align="left"
