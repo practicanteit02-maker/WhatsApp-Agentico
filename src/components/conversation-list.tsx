@@ -1646,26 +1646,56 @@ export function ConversationList({
                   )}
                 >
                   <div className="flex items-start gap-3 overflow-hidden">
-                    {isSelectMode ? (
-                      // Funcionalidad "Seleccionar chats": checkbox en vez del avatar mientras dura la selección.
-                      <span
-                        className={cn(
-                          'mt-0.5 flex size-9 flex-shrink-0 items-center justify-center rounded-full border-2',
-                          isSelectedForBulk
-                            ? 'border-primary bg-primary text-primary-foreground'
-                            : 'border-[var(--chat-border-strong)] text-transparent',
-                        )}
-                        aria-hidden="true"
-                      >
-                        {isSelectedForBulk ? <CheckSquare className="size-4" /> : <Square className="size-4" />}
-                      </span>
-                    ) : (
-                      <Avatar className="mt-0.5 size-9 flex-shrink-0">
-                        <AvatarFallback className="bg-[var(--chat-avatar)] text-xs font-semibold text-[var(--chat-avatar-foreground)]">
-                          {getAvatarInitials(thread.contactName, thread.phoneNumber)}
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
+                    {/* Envoltorio relativo para el avatar/checkbox — el
+                        indicador de "no leído" (badge o punto, más abajo) se
+                        posiciona absoluto dentro de este mismo envoltorio,
+                        superpuesto en su esquina superior derecha. Al no
+                        vivir en el flujo apilado de la columna derecha
+                        (zona/estado/hora), nunca ocupa espacio propio en el
+                        layout — no puede afectar la altura de la tarjeta,
+                        aparezca o no (ver el bug de la tarjeta creciendo al
+                        llegar un mensaje nuevo, ya arreglado una vez con un
+                        slot reservado que resultó agrandando TODAS las
+                        tarjetas al tamaño "con badge"; esta es la forma
+                        correcta). */}
+                    <div className="relative mt-0.5 flex-shrink-0">
+                      {isSelectMode ? (
+                        // Funcionalidad "Seleccionar chats": checkbox en vez del avatar mientras dura la selección.
+                        <span
+                          className={cn(
+                            'flex size-9 items-center justify-center rounded-full border-2',
+                            isSelectedForBulk
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-[var(--chat-border-strong)] text-transparent',
+                          )}
+                          aria-hidden="true"
+                        >
+                          {isSelectedForBulk ? <CheckSquare className="size-4" /> : <Square className="size-4" />}
+                        </span>
+                      ) : (
+                        <Avatar className="size-9">
+                          <AvatarFallback className="bg-[var(--chat-avatar)] text-xs font-semibold text-[var(--chat-avatar-foreground)]">
+                            {getAvatarInitials(thread.contactName, thread.phoneNumber)}
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
+
+                      {unreadCount > 0 ? (
+                        <span
+                          className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold tabular-nums text-primary-foreground ring-2 ring-[var(--chat-surface)]"
+                          aria-label={`${unreadCount} unread messages`}
+                        >
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      ) : isMarkedUnread && (
+                        // Marcado manualmente como no leído sin mensajes nuevos
+                        // reales: solo un punto, nunca un número inventado.
+                        <span
+                          className="absolute -right-0.5 -top-0.5 size-[10px] rounded-full bg-primary ring-2 ring-[var(--chat-surface)]"
+                          aria-label="Marked as unread"
+                        />
+                      )}
+                    </div>
                     <div className="flex min-w-0 flex-1 items-start justify-between gap-2 overflow-hidden">
                       <div className="min-w-0 flex-1 overflow-hidden">
                         <p className="truncate text-sm font-semibold leading-5 text-foreground">
@@ -1829,44 +1859,6 @@ export function ConversationList({
                             {formatThreadTimestamp(thread.lastActiveAt)}
                           </span>
                         )}
-
-                        {/* Slot de altura fija (18px, la del badge numérico)
-                            para el indicador de "no leído" — SIEMPRE ocupa su
-                            lugar en la columna apilada, tenga o no contenido
-                            visible. Antes esto se condicionaba por completo
-                            (sin nada en el caso "sin no leídos"), así que la
-                            columna derecha pasaba de 3 a 4 filas apiladas
-                            justo cuando llegaba un mensaje nuevo — como la
-                            fila solo tiene un mínimo de altura (min-h-[68px],
-                            no un techo), la tarjeta entera crecía para
-                            acomodar esa 4ª fila mientras el resto se quedaba
-                            más baja, inconsistente. */}
-                        <div className="flex h-[18px] items-center justify-center">
-                          {unreadCount > 0 ? (
-                            <span
-                              className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold tabular-nums text-primary-foreground"
-                              aria-label={`${unreadCount} unread messages`}
-                            >
-                              {unreadCount > 99 ? '99+' : unreadCount}
-                            </span>
-                          ) : isMarkedUnread ? (
-                            // Marcado manualmente como no leído sin mensajes
-                            // nuevos reales: solo un punto, nunca un número
-                            // inventado.
-                            <span
-                              className="size-[10px] rounded-full bg-primary"
-                              aria-label="Marked as unread"
-                            />
-                          ) : (
-                            // Nada que mostrar — el placeholder tiene el
-                            // mismo tamaño que el badge real (arriba), solo
-                            // que invisible, para que el slot no colapse.
-                            <span
-                              className="h-[18px] min-w-[18px] rounded-full opacity-0"
-                              aria-hidden="true"
-                            />
-                          )}
-                        </div>
 
                         {openRowMenuKey === thread.key && rowMenuPosition && createPortal(
                           <div
