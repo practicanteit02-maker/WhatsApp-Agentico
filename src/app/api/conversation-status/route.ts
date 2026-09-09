@@ -7,13 +7,13 @@ import { requierePermiso } from '@/lib/require-permission';
 /**
  * Estado de atención de cada chat (ver src/lib/chat-status.ts). GET
  * requiere estar logueado con un rol válido (permiso "leer" — ver
- * src/lib/permissions.ts). POST es "reasignar/estado", parte del permiso
- * "editar" de la matriz de roles — antes lo podía cambiar cualquier perfil
- * logueado, ahora (a pedido explícito) queda igual de restringido que
- * reasignar zona: solo Administrador. Sigue pasando también por
- * checkZoneAccess: un Administrador que además no fuera dueño de la zona
- * de ese chat de todas formas la ve completa, así que en la práctica el
- * único filtro real hoy es el de permiso.
+ * src/lib/permissions.ts). POST ("cambiar estado") requiere "escribir" —
+ * a pedido explícito, Administrador Y Coordinador pueden cambiarlo (QA no,
+ * porque tampoco tiene "escribir"). A diferencia de reasignar zona (que
+ * sigue exclusiva de Administrador vía "editar"), acá se relajó el
+ * permiso sin tocar checkZoneAccess: un no-Administrador con "escribir"
+ * solo puede cambiar el estado de un chat de su propia zona, igual que ya
+ * pasa con el resto de las acciones sobre un chat puntual.
  */
 export async function GET() {
   const denegado = await requierePermiso('leer');
@@ -24,7 +24,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const denegado = await requierePermiso('editar');
+  const denegado = await requierePermiso('escribir');
   if (denegado) return denegado;
 
   const body = await request.json().catch(() => null) as { threadKey?: string; estado?: string } | null;

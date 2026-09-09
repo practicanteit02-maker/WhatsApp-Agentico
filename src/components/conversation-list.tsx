@@ -400,13 +400,13 @@ export function ConversationList({
     refetchInterval: 30_000,
   });
 
-  // Funcionalidad "RBAC": reasignar zona y cambiar estado son la acción
-  // "editar" de la matriz de permisos (ver src/lib/permissions.ts) — hoy
-  // exclusiva de Administrador. Un solo booleano para los dos pills de abajo
-  // (zona y estado), calculado a partir del sessionPerfil ya validado que
-  // llega por props (no del hook usePermissions(), para no reintroducir la
-  // carrera de useSession() que ya se arregló una vez en este archivo — ver
-  // el comentario del useEffect de activeZone más arriba).
+  // Funcionalidad "RBAC": reasignar zona sigue siendo la acción "editar" de
+  // la matriz de permisos (ver src/lib/permissions.ts) — exclusiva de
+  // Administrador, sin cambios. Calculado a partir del sessionPerfil ya
+  // validado que llega por props (no del hook usePermissions(), para no
+  // reintroducir la carrera de useSession() que ya se arregló una vez en
+  // este archivo — ver el comentario del useEffect de activeZone más
+  // arriba).
   const canEditar = puedeSePuede(sessionPerfil, 'editar');
 
   const [zoneEditorThreadKey, setZoneEditorThreadKey] = useState<string | null>(null);
@@ -453,10 +453,12 @@ export function ConversationList({
   }, [zoneEditorThreadKey]);
 
   // Funcionalidad "Estado del chat" (ver src/lib/chat-status.ts): mismo
-  // patrón que la zona de arriba, y desde el sistema de permisos por rol
-  // (ver canEditar más arriba) también la misma restricción — antes lo
-  // podía cambiar cualquier perfil logueado, ahora solo quien tenga el
-  // permiso "editar".
+  // patrón que la zona de arriba, pero con un permiso propio — a pedido
+  // explícito, cambiar el estado es la acción "escribir" (Administrador Y
+  // Coordinador), no "editar" como la zona (que sigue exclusiva de
+  // Administrador, sin cambios).
+  const canCambiarEstado = puedeSePuede(sessionPerfil, 'escribir');
+
   const { data: statusMap = {} } = useQuery({
     queryKey: CONVERSATION_STATUS_QUERY_KEY,
     queryFn: fetchConversationStatuses,
@@ -1901,23 +1903,25 @@ export function ConversationList({
 
                         {/* Píldora con el estado de atención de este chat
                             (ver src/lib/chat-status.ts) — cambiarlo es la
-                            acción "editar" de la matriz de permisos, igual
-                            que reasignar zona (ver el comentario de arriba):
-                            hoy exclusiva de Administrador. */}
+                            acción "escribir" de la matriz de permisos
+                            (Administrador y Coordinador), a diferencia de
+                            reasignar zona (ver el comentario de arriba),
+                            que sigue exclusiva de Administrador vía
+                            "editar". */}
                         <button
                           type="button"
                           onClick={(e) => {
-                            if (!canEditar) return;
+                            if (!canCambiarEstado) return;
                             e.stopPropagation();
                             setStatusEditorPosition({ top: e.clientY, right: window.innerWidth - e.clientX });
                             setStatusEditorThreadKey(thread.key);
                           }}
-                          disabled={!canEditar}
-                          title={canEditar ? undefined : `Tu rol (${sessionPerfil}) no tiene permiso para cambiar el estado`}
+                          disabled={!canCambiarEstado}
+                          title={canCambiarEstado ? undefined : `Tu rol (${sessionPerfil}) no tiene permiso para cambiar el estado`}
                           className={cn(
                             'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none',
                             STATUS_STYLE[status],
-                            canEditar ? 'hover:opacity-80' : 'cursor-not-allowed opacity-50',
+                            canCambiarEstado ? 'hover:opacity-80' : 'cursor-not-allowed opacity-50',
                           )}
                         >
                           <Tag className="size-2.5 flex-shrink-0" />
