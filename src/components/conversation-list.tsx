@@ -2147,18 +2147,27 @@ export function ConversationList({
           divisorias de abajo queden a la misma altura y no se vean
           disparejas contra la línea vertical que separa ambos paneles. */}
       <div className="flex flex-shrink-0 items-center gap-2 border-t border-[var(--chat-border-strong)] bg-[var(--chat-surface)] px-3 py-2 sm:py-3">
-        <Button
-          asChild
-          variant="ghost"
-          size="icon"
-          className="size-11 rounded-md border border-[var(--chat-border-strong)] text-muted-foreground hover:bg-[var(--chat-hover)] hover:text-foreground md:size-10"
-          aria-label="Inbox settings"
-          title="Inbox settings"
-        >
-          <Link href="/settings">
-            <Settings className="size-5" />
-          </Link>
-        </Button>
+        {/* Funcionalidad "RBAC": el ícono de Ajustes (número de teléfonos
+            rastreados) queda exclusivo de Administrador, mismo helper que
+            ya usa el botón de Usuarios más abajo en esta misma barra —
+            Coordinador y QA ni lo ven en el DOM. La pantalla en sí también
+            queda protegida server-side (ver src/app/settings/page.tsx),
+            así que esto es solo para no mostrar un acceso que de todas
+            formas va a rebotar. */}
+        {esAdministrador(sessionPerfil) && (
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="size-11 rounded-md border border-[var(--chat-border-strong)] text-muted-foreground hover:bg-[var(--chat-hover)] hover:text-foreground md:size-10"
+            aria-label="Inbox settings"
+            title="Inbox settings"
+          >
+            <Link href="/settings">
+              <Settings className="size-5" />
+            </Link>
+          </Button>
+        )}
         <Button
           asChild
           variant="ghost"
