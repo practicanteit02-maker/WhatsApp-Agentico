@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInboxLiveUpdates } from "@/hooks/use-inbox-live-updates";
+import { usePermissions } from "@/hooks/use-permissions";
 import { convertImageToSupportedFormatIfNeeded } from "@/lib/convert-image";
 import { playSentMessageSound } from "@/lib/notification-sounds";
 import type { ChatCollabPayload, ChatPresenceState } from "@/lib/event-bus";
@@ -488,7 +489,7 @@ type Props = {
    * padre limpie `jumpToMessageId` y no se repita si se reabre el mismo chat. */
   onJumpToMessageHandled?: () => void;
   /** Funcionalidad "Perfil": nombre del perfil activo (Administrador,
-   * Secretaria, etc. — ver el menú de perfiles en conversation-list.tsx),
+   * Coordinadora, etc. — ver el menú de perfiles en conversation-list.tsx),
    * mostrado en cada burbuja saliente como el "remitente". Es un adelanto de
    * cuando varias personas puedan mandar mensajes desde el mismo número: por
    * ahora no hay sesiones reales, así que es el mismo nombre para todos los
@@ -515,6 +516,13 @@ export function MessageView({
   onJumpToMessageHandled,
   activeSenderName,
 }: Props) {
+  // Funcionalidad "RBAC": responder (mandar texto/archivo/reacción/
+  // plantilla) es la acción "escribir" de la matriz de permisos (ver
+  // src/lib/permissions.ts) — hoy la tienen Administrador y Coordinadora,
+  // no QA. Este componente no recibe el perfil por props (a diferencia de
+  // conversation-list.tsx), así que usa el hook directo.
+  const { perfil, puede } = usePermissions();
+  const canEscribir = puede('escribir');
 
   const [refreshing, setRefreshing] = useState(false);
   const [messageInput, setMessageInput] = useState("");
@@ -1700,17 +1708,22 @@ export function MessageView({
               <div className="relative" ref={templatePickerRef}>
                 <Button
                   type="button"
-                  onClick={() => setShowTemplatePicker((open) => !open)}
+                  onClick={() => {
+                    if (!canEscribir) return;
+                    setShowTemplatePicker((open) => !open);
+                  }}
+                  disabled={!canEscribir}
                   variant="ghost"
                   size="icon"
                   className={cn(
                     "size-11 text-muted-foreground hover:bg-[var(--chat-hover)] md:size-10",
                     showTemplatePicker && "bg-[var(--chat-hover)] text-foreground",
+                    !canEscribir && "cursor-not-allowed opacity-50",
                   )}
                   aria-haspopup="menu"
                   aria-expanded={showTemplatePicker}
                   aria-label="Elegir plantilla"
-                  title="Elegir plantilla"
+                  title={canEscribir ? "Elegir plantilla" : `Tu rol (${perfil}) no tiene permiso para responder`}
                 >
                   <LayoutTemplate className="h-4 w-4" />
                 </Button>
@@ -2174,6 +2187,7 @@ export function MessageView({
                         <Button
                           type="button"
                           onClick={(e) => {
+                            if (!canEscribir) return;
                             const rect = e.currentTarget.getBoundingClientRect();
                             setReactionPickerPosition({
                               top: rect.bottom + 6,
@@ -2181,11 +2195,15 @@ export function MessageView({
                             });
                             setReactionPickerMessageId(message.id);
                           }}
+                          disabled={!canEscribir}
                           variant="ghost"
                           size="icon"
-                          className="size-7 text-muted-foreground opacity-100 hover:bg-[var(--chat-hover)] sm:opacity-0 sm:group-hover:opacity-100"
+                          className={cn(
+                            "size-7 text-muted-foreground opacity-100 hover:bg-[var(--chat-hover)] sm:opacity-0 sm:group-hover:opacity-100",
+                            !canEscribir && "cursor-not-allowed opacity-50 sm:opacity-50",
+                          )}
                           aria-label="React to message"
-                          title="React"
+                          title={canEscribir ? "React" : `Tu rol (${perfil}) no tiene permiso para responder`}
                         >
                           <Smile className="h-3.5 w-3.5" />
                         </Button>
@@ -2354,12 +2372,15 @@ export function MessageView({
               <Button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={sending}
+                disabled={sending || !canEscribir}
                 variant="ghost"
                 size="icon"
-                className="size-11 text-muted-foreground hover:bg-[var(--chat-icon-hover)] md:size-10"
+                className={cn(
+                  "size-11 text-muted-foreground hover:bg-[var(--chat-icon-hover)] md:size-10",
+                  !canEscribir && "cursor-not-allowed opacity-50",
+                )}
                 aria-label="Upload file"
-                title="Upload file"
+                title={canEscribir ? "Upload file" : `Tu rol (${perfil}) no tiene permiso para responder`}
               >
                 <Paperclip className="h-5 w-5" />
               </Button>
@@ -2424,29 +2445,33 @@ export function MessageView({
                     postCollabAction(collabThreadKey, "typing", { profile: activeSenderName });
                   }
                 }}
-                placeholder="Type a message"
-                // Nunca se deshabilita a propósito mientras se envía: los
-                // envíos de texto son optimistas (burbuja instantánea,
-                // compositor limpio), así que el usuario debería poder
-                // seguir escribiendo y dándole Enter uno tras otro sin que
-                // el campo se congele/pierda el foco a mitad del envío.
-                disabled={false}
+                placeholder={canEscribir ? "Type a message" : `Tu rol (${perfil}) no tiene permiso para responder`}
+                // Nunca se deshabilita por `sending` a propósito: los envíos
+                // de texto son optimistas (burbuja instantánea, compositor
+                // limpio), así que el usuario debería poder seguir
+                // escribiendo y dándole Enter uno tras otro sin que el campo
+                // se congele/pierda el foco a mitad del envío. La única
+                // razón real para deshabilitarlo es el permiso RBAC.
+                disabled={!canEscribir}
                 aria-label="Message"
-                className="h-11 min-w-0 flex-1 rounded-lg border-[var(--chat-border-strong)] bg-[var(--chat-input)] text-base focus-visible:ring-primary md:h-10 md:text-sm"
+                title={canEscribir ? undefined : `Tu rol (${perfil}) no tiene permiso para responder`}
+                className="h-11 min-w-0 flex-1 rounded-lg border-[var(--chat-border-strong)] bg-[var(--chat-input)] text-base focus-visible:ring-primary md:h-10 md:text-sm disabled:cursor-not-allowed disabled:opacity-50"
               />
               <Button
                 type="submit"
-                // Solo se condiciona a `sending` para subidas de archivo. Si
-                // esto se quedara deshabilitado durante un envío de texto
-                // plano, darle Enter para el siguiente mensaje no haría nada
-                // en silencio — los navegadores rechazan el envío implícito
-                // del formulario (Enter) cuando el único botón de envío está
-                // deshabilitado, aunque hacer clic no sea la única forma en
-                // que este formulario se envía.
-                disabled={(sending && !!selectedFile) || (!messageInput.trim() && !selectedFile)}
+                // Antes solo se condicionaba a `sending` para subidas de
+                // archivo (ver el comentario del campo de texto de arriba) —
+                // ahora también se suma el permiso RBAC, la única razón por
+                // la que se deshabilita mientras hay texto o archivo listos
+                // para mandar.
+                disabled={!canEscribir || (sending && !!selectedFile) || (!messageInput.trim() && !selectedFile)}
                 size="icon"
-                className="size-11 rounded-full bg-primary hover:bg-[var(--primary-hover)] md:size-10"
+                className={cn(
+                  "size-11 rounded-full bg-primary hover:bg-[var(--primary-hover)] md:size-10",
+                  !canEscribir && "cursor-not-allowed opacity-50",
+                )}
                 aria-label="Send message"
+                title={canEscribir ? undefined : `Tu rol (${perfil}) no tiene permiso para responder`}
               >
                 <Send className="h-5 w-5" />
               </Button>

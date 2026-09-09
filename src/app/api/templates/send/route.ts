@@ -4,6 +4,7 @@ import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inb
 import { checkZoneAccess } from '@/lib/conversation-zones';
 import { threadKeyFor } from '@/lib/inbox-data';
 import { whatsappClient } from '@/lib/whatsapp-client';
+import { requierePermiso } from '@/lib/require-permission';
 import type { TemplateParameterInfo } from '@/types/whatsapp';
 
 type TemplateSendInput = Parameters<typeof buildTemplateSendPayload>[0];
@@ -16,6 +17,9 @@ type ButtonTextParameter = { type: 'text'; text: string; parameter_name?: string
 
 export async function POST(request: Request) {
   try {
+    const denegado = await requierePermiso('escribir');
+    if (denegado) return denegado;
+
     const body = await request.json();
     const {
       to,

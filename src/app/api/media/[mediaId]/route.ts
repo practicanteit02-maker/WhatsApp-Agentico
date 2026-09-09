@@ -3,6 +3,7 @@ import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inb
 import { checkZoneAccess } from '@/lib/conversation-zones';
 import { threadKeyFor } from '@/lib/inbox-data';
 import { whatsappClient } from '@/lib/whatsapp-client';
+import { requierePermiso } from '@/lib/require-permission';
 
 export async function GET(
   request: Request,
@@ -10,6 +11,9 @@ export async function GET(
 ) {
   const { mediaId } = await params;
   try {
+    const denegado = await requierePermiso('leer');
+    if (denegado) return denegado;
+
     const { searchParams } = new URL(request.url);
     const configuredPhoneNumber = await resolvePhoneNumberContext(searchParams.get('phoneNumberId') ?? undefined);
     const phoneNumberId = configuredPhoneNumber.phone_number_id;

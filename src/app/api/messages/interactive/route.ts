@@ -3,9 +3,13 @@ import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inb
 import { checkZoneAccess } from '@/lib/conversation-zones';
 import { threadKeyFor } from '@/lib/inbox-data';
 import { whatsappClient } from '@/lib/whatsapp-client';
+import { requierePermiso } from '@/lib/require-permission';
 
 export async function POST(request: Request) {
   try {
+    const denegado = await requierePermiso('escribir');
+    if (denegado) return denegado;
+
     const body = await request.json();
     const { phoneNumber, businessScopedUserId, header, body: bodyText, buttons, phoneNumberId: requestedPhoneNumberId } = body;
     const configuredPhoneNumber = await resolvePhoneNumberContext(requestedPhoneNumberId);

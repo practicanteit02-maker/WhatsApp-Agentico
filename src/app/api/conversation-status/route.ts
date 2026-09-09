@@ -2,25 +2,31 @@ import { NextResponse } from 'next/server';
 import { getAllStatuses, isValidStatus, setStatus } from '@/lib/chat-status';
 import { checkZoneAccess, getZone } from '@/lib/conversation-zones';
 import { emitChatCollabUpdate } from '@/lib/event-bus';
+import { requierePermiso } from '@/lib/require-permission';
 
 /**
- * Estado de atención de cada chat (ver src/lib/chat-status.ts). GET es de
- * lectura libre para cualquier sesión — solo expone en qué estado está cada
- * chat, no el contenido de ningún mensaje. POST requiere sesión y, a
- * diferencia de /api/conversation-zones, no está restringido a
- * Administrador (cualquier perfil logueado puede cambiar el estado de un
- * chat — es una marca operativa del día a día, no una decisión de acceso)
- * — pero sigue pasando por checkZoneAccess, el mismo control que ya
- * protege el resto de los endpoints de un chat puntual: un
- * no-Administrador solo puede tocar el estado de un chat de su propia
- * zona (la única que puede ver de todas formas).
+ * Estado de atención de cada chat (ver src/lib/chat-status.ts). GET
+ * requiere estar logueado con un rol válido (permiso "leer" — ver
+ * src/lib/permissions.ts). POST es "reasignar/estado", parte del permiso
+ * "editar" de la matriz de roles — antes lo podía cambiar cualquier perfil
+ * logueado, ahora (a pedido explícito) queda igual de restringido que
+ * reasignar zona: solo Administrador. Sigue pasando también por
+ * checkZoneAccess: un Administrador que además no fuera dueño de la zona
+ * de ese chat de todas formas la ve completa, así que en la práctica el
+ * único filtro real hoy es el de permiso.
  */
 export async function GET() {
+  const denegado = await requierePermiso('leer');
+  if (denegado) return denegado;
+
   const statuses = await getAllStatuses();
   return NextResponse.json({ statuses });
 }
 
 export async function POST(request: Request) {
+  const denegado = await requierePermiso('editar');
+  if (denegado) return denegado;
+
   const body = await request.json().catch(() => null) as { threadKey?: string; estado?: string } | null;
   if (!body?.threadKey || !body.estado) {
     return NextResponse.json({ error: 'Missing threadKey or estado' }, { status: 400 });

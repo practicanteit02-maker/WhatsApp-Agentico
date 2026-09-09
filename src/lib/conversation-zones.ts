@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { auth } from '@/auth';
+import { esAdministrador } from '@/lib/permissions';
 
 /**
  * Zona real de cada conversación (reemplaza el sistema mock de
@@ -80,7 +81,7 @@ export async function checkZoneAccess(threadKey: string): Promise<ZoneAccessResu
     return { allowed: false, status: 401, error: 'No autenticado' };
   }
 
-  if (session.user.perfil === 'Administrador') {
+  if (esAdministrador(session.user.perfil)) {
     return { allowed: true };
   }
 

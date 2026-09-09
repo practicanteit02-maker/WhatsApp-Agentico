@@ -36,6 +36,7 @@ import { NewChatDialog } from '@/components/new-chat-dialog';
 import { type StarredMessage } from '@/lib/starred-messages';
 import { getProfileStyle } from '@/lib/mock-profiles';
 import { getAssignableZones, MOCK_ZONE_OPTIONS } from '@/lib/mock-zones';
+import { esAdministrador, puedeSePuede } from '@/lib/permissions';
 import { ASSIGNABLE_STATUSES, type ChatStatus } from '@/lib/chat-status';
 
 // Funcionalidad "Vista previa de media": en vez del texto feo que genera
@@ -339,7 +340,7 @@ export function ConversationList({
   useEffect(() => {
     if (sessionLoading) return;
 
-    if (sessionPerfil === 'Administrador') {
+    if (esAdministrador(sessionPerfil)) {
       setActiveZone(MOCK_ZONE_OPTIONS[0]);
       return;
     }
@@ -397,6 +398,15 @@ export function ConversationList({
     refetchInterval: 30_000,
   });
 
+  // Funcionalidad "RBAC": reasignar zona y cambiar estado son la acción
+  // "editar" de la matriz de permisos (ver src/lib/permissions.ts) — hoy
+  // exclusiva de Administrador. Un solo booleano para los dos pills de abajo
+  // (zona y estado), calculado a partir del sessionPerfil ya validado que
+  // llega por props (no del hook usePermissions(), para no reintroducir la
+  // carrera de useSession() que ya se arregló una vez en este archivo — ver
+  // el comentario del useEffect de activeZone más arriba).
+  const canEditar = puedeSePuede(sessionPerfil, 'editar');
+
   const [zoneEditorThreadKey, setZoneEditorThreadKey] = useState<string | null>(null);
   const [zoneEditorPosition, setZoneEditorPosition] = useState<{ top: number; right: number } | null>(null);
 
@@ -441,9 +451,10 @@ export function ConversationList({
   }, [zoneEditorThreadKey]);
 
   // Funcionalidad "Estado del chat" (ver src/lib/chat-status.ts): mismo
-  // patrón que la zona de arriba, salvo que acá cualquier perfil logueado
-  // puede cambiarlo (no solo Administrador) — es una marca operativa del
-  // día a día, no una decisión de acceso.
+  // patrón que la zona de arriba, y desde el sistema de permisos por rol
+  // (ver canEditar más arriba) también la misma restricción — antes lo
+  // podía cambiar cualquier perfil logueado, ahora solo quien tenga el
+  // permiso "editar".
   const { data: statusMap = {} } = useQuery({
     queryKey: CONVERSATION_STATUS_QUERY_KEY,
     queryFn: fetchConversationStatuses,
@@ -1151,7 +1162,7 @@ export function ConversationList({
                 etc.) — igual que el menú de perfil, todavía no filtra ni
                 cambia nada real, solo marca cuál opción quedó elegida. Ocupa
                 el lugar donde antes iba el letrero fijo "WhatsApp". */}
-            {sessionPerfil === 'Administrador' ? (
+            {esAdministrador(sessionPerfil) ? (
               <div className="relative" ref={zoneMenuRef}>
                 <button
                   type="button"
@@ -1224,6 +1235,25 @@ export function ConversationList({
               >
                 <SquarePen className="size-4" />
               </Button>
+
+              {/* Funcionalidad "RBAC": etiqueta visual del rol activo, siempre
+                  visible en el header (no hace falta abrir el menú de cuenta
+                  para verla) — mismo color que getProfileStyle() usa en el
+                  resto del panel (etiqueta de remitente sobre cada burbuja,
+                  barra de "quién atiende este chat"), para que sea
+                  reconocible de un vistazo que es el mismo dato. */}
+              {sessionPerfil !== 'Sin asignar' && (
+                <span
+                  className="hidden h-7 flex-shrink-0 items-center rounded-full px-2.5 text-[11px] font-semibold sm:inline-flex"
+                  style={{
+                    color: getProfileStyle(sessionPerfil).color,
+                    backgroundColor: `color-mix(in srgb, ${getProfileStyle(sessionPerfil).color} 15%, transparent)`,
+                  }}
+                  title={`Rol activo: ${sessionPerfil}`}
+                >
+                  {sessionPerfil}
+                </span>
+              )}
 
               {/* Funcionalidad "Perfil": adelanto visual de un menú de cuenta,
                   antes de que exista login de verdad — por ahora muestra datos
@@ -1673,31 +1703,33 @@ export function ConversationList({
                       </div>
                       <div className="ml-2 flex flex-shrink-0 flex-col items-end gap-1 pt-0.5">
                         {/* Píldora con la zona real de este chat (ver
-                            src/lib/conversation-zones.ts) — clickeable solo
-                            para Administrador, que puede asignarla o
-                            cambiarla; para cualquier otro perfil es de solo
-                            lectura (y, al llegar server-side ya filtrado por
-                            zona, prácticamente siempre va a coincidir con la
-                            suya propia). */}
-                        {sessionPerfil === 'Administrador' ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setZoneEditorPosition({ top: e.clientY, right: window.innerWidth - e.clientX });
-                              setZoneEditorThreadKey(thread.key);
-                            }}
-                            className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-primary hover:bg-primary/25"
-                          >
-                            <MapPin className="size-2.5 flex-shrink-0" />
-                            {zone && <span className="truncate">{zone}</span>}
-                          </button>
-                        ) : (
-                          <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-primary">
-                            <MapPin className="size-2.5 flex-shrink-0" />
-                            {zone && <span className="truncate">{zone}</span>}
-                          </span>
-                        )}
+                            src/lib/conversation-zones.ts) — reasignarla es la
+                            acción "editar" de la matriz de permisos (ver
+                            src/lib/permissions.ts), hoy exclusiva de
+                            Administrador. El botón queda siempre visible para
+                            todos los roles (nunca se oculta el control) pero
+                            deshabilitado con un tooltip explicando el motivo
+                            cuando el rol activo no tiene el permiso, en vez
+                            de convertirse en un elemento de solo lectura
+                            distinto. */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            if (!canEditar) return;
+                            e.stopPropagation();
+                            setZoneEditorPosition({ top: e.clientY, right: window.innerWidth - e.clientX });
+                            setZoneEditorThreadKey(thread.key);
+                          }}
+                          disabled={!canEditar}
+                          title={canEditar ? undefined : `Tu rol (${sessionPerfil}) no tiene permiso para reasignar zona`}
+                          className={cn(
+                            'inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-primary',
+                            canEditar ? 'hover:bg-primary/25' : 'cursor-not-allowed opacity-50',
+                          )}
+                        >
+                          <MapPin className="size-2.5 flex-shrink-0" />
+                          {zone && <span className="truncate">{zone}</span>}
+                        </button>
 
                         {zoneEditorThreadKey === thread.key && zoneEditorPosition && createPortal(
                           <div
@@ -1734,19 +1766,24 @@ export function ConversationList({
                         )}
 
                         {/* Píldora con el estado de atención de este chat
-                            (ver src/lib/chat-status.ts) — a diferencia de la
-                            zona, cualquier perfil logueado puede cambiarla,
-                            no solo Administrador. */}
+                            (ver src/lib/chat-status.ts) — cambiarlo es la
+                            acción "editar" de la matriz de permisos, igual
+                            que reasignar zona (ver el comentario de arriba):
+                            hoy exclusiva de Administrador. */}
                         <button
                           type="button"
                           onClick={(e) => {
+                            if (!canEditar) return;
                             e.stopPropagation();
                             setStatusEditorPosition({ top: e.clientY, right: window.innerWidth - e.clientX });
                             setStatusEditorThreadKey(thread.key);
                           }}
+                          disabled={!canEditar}
+                          title={canEditar ? undefined : `Tu rol (${sessionPerfil}) no tiene permiso para cambiar el estado`}
                           className={cn(
-                            'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none hover:opacity-80',
+                            'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none',
                             STATUS_STYLE[status],
+                            canEditar ? 'hover:opacity-80' : 'cursor-not-allowed opacity-50',
                           )}
                         >
                           <Tag className="size-2.5 flex-shrink-0" />
@@ -1911,7 +1948,7 @@ export function ConversationList({
             <LayoutTemplate className="size-5" />
           </Link>
         </Button>
-        {sessionPerfil === 'Administrador' && (
+        {esAdministrador(sessionPerfil) && (
           <Button
             asChild
             variant="ghost"

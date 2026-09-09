@@ -9,6 +9,8 @@ import { configurationErrorResponse, getTrackedPhoneNumbers } from '@/lib/inbox-
 import { getAllZones } from '@/lib/conversation-zones';
 import { threadKeyFor } from '@/lib/inbox-data';
 import { whatsappClient } from '@/lib/whatsapp-client';
+import { esAdministrador } from '@/lib/permissions';
+import { requierePermiso } from '@/lib/require-permission';
 import type { KapsoPhoneNumber } from '@/types/settings';
 
 // Funcionalidad "Reaccionar a un mensaje": Kapso reporta el evento de
@@ -111,6 +113,9 @@ function parseDirection(kapso?: ConversationKapsoExtensions): 'inbound' | 'outbo
 
 export async function GET(request: Request) {
   try {
+    const denegado = await requierePermiso('leer');
+    if (denegado) return denegado;
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const parsedLimit = Number.parseInt(searchParams.get('limit') ?? '', 10);
@@ -220,7 +225,7 @@ export async function GET(request: Request) {
     // zonas — no es solo ocultarlos en la interfaz, se descartan acá,
     // server-side, antes de mandar la respuesta.
     const session = await auth();
-    const visibleData = session?.user?.perfil === 'Administrador'
+    const visibleData = esAdministrador(session?.user?.perfil)
       ? transformedData
       : await (async () => {
           const zones = await getAllZones();

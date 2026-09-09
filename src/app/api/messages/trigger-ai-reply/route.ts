@@ -3,6 +3,7 @@ import { sendAutoReply } from '@/lib/auto-reply';
 import { checkZoneAccess } from '@/lib/conversation-zones';
 import { getAiEnabled } from '@/lib/chat-ai-config';
 import { threadKeyFor } from '@/lib/inbox-data';
+import { requierePermiso } from '@/lib/require-permission';
 
 type TriggerAIReplyBody = {
   phoneNumberId?: string;
@@ -31,6 +32,9 @@ type TriggerAIReplyBody = {
  */
 export async function POST(request: Request) {
   try {
+    const denegado = await requierePermiso('escribir');
+    if (denegado) return denegado;
+
     const body = (await request.json()) as TriggerAIReplyBody;
     const { phoneNumberId, to, businessScopedUserId, incomingText, messageId, conversationId } = body;
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inbox-settings';
 import { whatsappClient } from '@/lib/whatsapp-client';
+import { requierePermiso } from '@/lib/require-permission';
 
 const TEMPLATE_CATEGORIES = ['MARKETING', 'UTILITY', 'AUTHENTICATION'] as const;
 type TemplateCategoryInput = (typeof TEMPLATE_CATEGORIES)[number];
@@ -33,6 +34,9 @@ function normalizeTemplateVariables(text: string): { text: string; variableCount
 
 export async function POST(request: Request) {
   try {
+    const denegado = await requierePermiso('escribir');
+    if (denegado) return denegado;
+
     const body = await request.json();
     const {
       phoneNumberId: requestedPhoneNumberId,
@@ -205,6 +209,9 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
+    const denegado = await requierePermiso('leer');
+    if (denegado) return denegado;
+
     const { searchParams } = new URL(request.url);
     const phoneNumber = await resolvePhoneNumberContext(searchParams.get('phoneNumberId') ?? undefined);
     const wabaId = phoneNumber.business_account_id || process.env.WABA_ID;

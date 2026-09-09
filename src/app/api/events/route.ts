@@ -6,6 +6,7 @@ import {
   type ChatCollabPayload,
   type InboxUpdatePayload,
 } from '@/lib/event-bus';
+import { esAdministrador } from '@/lib/permissions';
 
 // Debe correr en el servidor Node.js de larga duración (no en el runtime
 // Edge) y nunca optimizarse estáticamente, ya que esta es una conexión de
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
   // ver src/lib/event-bus.ts) coincide con la suya — sin sesión o sin zona
   // asignada, no recibe ninguno (falla cerrado).
   const session = await auth();
-  const isAdmin = session?.user?.perfil === 'Administrador';
+  const isAdmin = esAdministrador(session?.user?.perfil);
   const sessionZona = session?.user?.zona;
 
   function isVisibleToThisConnection(zona: string | undefined): boolean {

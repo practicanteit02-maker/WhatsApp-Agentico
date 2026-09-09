@@ -6,22 +6,23 @@
 // registrado como remitente de cada mensaje que se manda. El color/inicial
 // de cada uno se usa en esas mismas pantallas (barra de "quién atiende este
 // chat", etiqueta de remitente sobre cada burbuja).
-export const MOCK_ACCOUNT_PROFILES = [
-  'Administrador',
-  'Secretaria',
-  'Ventas',
-  'Soporte',
-] as const;
+//
+// Los tres perfiles son exactamente los roles del sistema de permisos (ver
+// src/lib/permissions.ts) — se reexportan como MOCK_ACCOUNT_PROFILES en vez
+// de definirse de nuevo acá para que no haya dos listas de roles que puedan
+// desincronizarse.
+import { ROLES, type Rol } from '@/lib/permissions';
 
-export type MockAccountProfile = (typeof MOCK_ACCOUNT_PROFILES)[number];
+export const MOCK_ACCOUNT_PROFILES = ROLES;
+
+export type MockAccountProfile = Rol;
 
 type ProfileStyle = { initial: string; color: string };
 
 const PROFILE_STYLES: Record<MockAccountProfile, ProfileStyle> = {
   Administrador: { initial: 'A', color: 'rgb(111, 0, 255)' },
-  Secretaria: { initial: 'S', color: 'rgb(34, 160, 107)' },
-  Ventas: { initial: 'V', color: '#2f8fd8' },
-  Soporte: { initial: 'So', color: 'rgb(200, 138, 13)' },
+  Coordinadora: { initial: 'C', color: 'rgb(34, 160, 107)' },
+  QA: { initial: 'QA', color: '#2f8fd8' },
 };
 
 const FALLBACK_STYLE: ProfileStyle = { initial: '?', color: 'var(--muted-foreground)' };

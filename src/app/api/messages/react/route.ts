@@ -3,6 +3,7 @@ import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inb
 import { checkZoneAccess } from '@/lib/conversation-zones';
 import { threadKeyFor } from '@/lib/inbox-data';
 import { whatsappClient } from '@/lib/whatsapp-client';
+import { requierePermiso } from '@/lib/require-permission';
 
 type ReactBody = {
   phoneNumberId?: string;
@@ -28,6 +29,9 @@ type ReactBody = {
  */
 export async function POST(request: Request) {
   try {
+    const denegado = await requierePermiso('escribir');
+    if (denegado) return denegado;
+
     const body = (await request.json()) as ReactBody;
     const { to, businessScopedUserId, messageId, emoji } = body;
     const configuredPhoneNumber = await resolvePhoneNumberContext(body.phoneNumberId);

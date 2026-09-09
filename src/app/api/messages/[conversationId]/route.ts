@@ -9,6 +9,7 @@ import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inb
 import { checkZoneAccess } from '@/lib/conversation-zones';
 import { threadKeyFor } from '@/lib/inbox-data';
 import { whatsappClient } from '@/lib/whatsapp-client';
+import { requierePermiso } from '@/lib/require-permission';
 
 type MessageTypeData = {
   filename?: string;
@@ -148,6 +149,9 @@ export async function GET(
 ) {
   const { conversationId } = await params;
   try {
+    const denegado = await requierePermiso('leer');
+    if (denegado) return denegado;
+
     const { searchParams } = new URL(request.url);
     const parsedLimit = Number.parseInt(searchParams.get('limit') ?? '', 10);
     const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 50;

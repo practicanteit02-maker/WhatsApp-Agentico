@@ -1,20 +1,25 @@
 import { NextResponse } from 'next/server';
 import { getAllAiEnabled, setAiEnabled } from '@/lib/chat-ai-config';
 import { checkZoneAccess } from '@/lib/conversation-zones';
+import { requierePermiso } from '@/lib/require-permission';
 
 /**
  * Si la IA responde automáticamente al abrir un chat en particular (ver
- * src/lib/chat-ai-config.ts). GET es de lectura libre para cualquier
- * sesión — solo expone qué chats tienen la IA prendida, no el contenido de
- * ningún mensaje. POST requiere sesión y, a diferencia de
- * /api/conversation-zones, no está restringido a Administrador (cualquier
- * perfil logueado puede prender/apagar la IA de un chat) — pero sigue
- * pasando por checkZoneAccess, el mismo control que ya protege el resto de
- * los endpoints de un chat puntual: un no-Administrador solo puede tocar
- * el interruptor de un chat de su propia zona (la única que puede ver de
- * todas formas).
+ * src/lib/chat-ai-config.ts). GET requiere estar logueado con un rol válido
+ * (permiso "leer" — ver src/lib/permissions.ts). POST requiere sesión y, a
+ * diferencia de /api/conversation-zones, no está restringido a
+ * Administrador (cualquier perfil logueado puede prender/apagar la IA de un
+ * chat) — esto no es "responder/crear" ni "estado/reasignar", así que
+ * queda fuera de la matriz de roles de este cambio a propósito, sin
+ * endurecer. Sigue pasando por checkZoneAccess, el mismo control que ya
+ * protege el resto de los endpoints de un chat puntual: un no-Administrador
+ * solo puede tocar el interruptor de un chat de su propia zona (la única
+ * que puede ver de todas formas).
  */
 export async function GET() {
+  const denegado = await requierePermiso('leer');
+  if (denegado) return denegado;
+
   const config = await getAllAiEnabled();
   return NextResponse.json({ config });
 }

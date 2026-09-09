@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowLeft, Clock, Loader2, Megaphone, Send, ShieldCheck, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/use-permissions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -155,6 +156,15 @@ type Props = {
  * WhatsApp.
  */
 export function TemplateComposer({ phoneNumber, businessScopedUserId, phoneNumberId, introText, onSent }: Props) {
+  // Funcionalidad "RBAC": mandar una plantilla es la acción "escribir" de
+  // la matriz de permisos (ver src/lib/permissions.ts). En message-view.tsx
+  // el botón que abre este panel ya queda deshabilitado para quien no tenga
+  // el permiso, pero el botón "Enviar" de acá también se gatea por las
+  // dudas (defensa en profundidad de la UI — la de verdad la hace
+  // /api/templates/send server-side).
+  const { perfil, puede } = usePermissions();
+  const canEscribir = puede('escribir');
+
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -439,8 +449,12 @@ export function TemplateComposer({ phoneNumber, businessScopedUserId, phoneNumbe
 
       <Button
         onClick={handleSend}
-        disabled={!allParametersFilled || sending}
-        className="h-11 w-full rounded-full bg-primary shadow-sm hover:bg-[var(--primary-hover)] md:h-10 md:w-auto md:px-6"
+        disabled={!allParametersFilled || sending || !canEscribir}
+        className={cn(
+          'h-11 w-full rounded-full bg-primary shadow-sm hover:bg-[var(--primary-hover)] md:h-10 md:w-auto md:px-6',
+          !canEscribir && 'cursor-not-allowed opacity-50',
+        )}
+        title={canEscribir ? undefined : `Tu rol (${perfil}) no tiene permiso para responder`}
       >
         {sending ? (
           <Loader2 className="h-4 w-4 animate-spin" />

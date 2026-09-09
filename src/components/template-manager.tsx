@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/use-permissions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -142,6 +143,12 @@ type Props = {
  * solo se manda la solicitud de creación.
  */
 export function TemplateManager({ phoneNumberId }: Props) {
+  // Funcionalidad "RBAC": crear una plantilla es la acción "escribir" de la
+  // matriz de permisos (ver src/lib/permissions.ts) — hoy la tienen
+  // Administrador y Coordinadora, no QA.
+  const { perfil, puede } = usePermissions();
+  const canEscribir = puede('escribir');
+
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -308,11 +315,17 @@ export function TemplateManager({ phoneNumberId }: Props) {
           <Button
             type="button"
             onClick={() => {
+              if (!canEscribir && !showForm) return;
               setShowForm((current) => !current);
               setSubmitError(null);
               setSubmitSuccess(null);
             }}
-            className="h-9 rounded-md bg-primary hover:bg-[var(--primary-hover)]"
+            disabled={!canEscribir && !showForm}
+            className={cn(
+              'h-9 rounded-md bg-primary hover:bg-[var(--primary-hover)]',
+              !canEscribir && !showForm && 'cursor-not-allowed opacity-50',
+            )}
+            title={canEscribir || showForm ? undefined : `Tu rol (${perfil}) no tiene permiso para crear plantillas`}
           >
             {showForm ? <X className="size-4" /> : <Plus className="size-4" />}
             <span>{showForm ? 'Cerrar' : 'Nueva plantilla'}</span>
@@ -569,8 +582,12 @@ export function TemplateManager({ phoneNumberId }: Props) {
           <Button
             type="button"
             onClick={handleSubmit}
-            disabled={!canSubmit || submitting}
-            className="h-10 w-full bg-primary hover:bg-[var(--primary-hover)] sm:w-auto"
+            disabled={!canSubmit || submitting || !canEscribir}
+            className={cn(
+              'h-10 w-full bg-primary hover:bg-[var(--primary-hover)] sm:w-auto',
+              !canEscribir && 'cursor-not-allowed opacity-50',
+            )}
+            title={canEscribir ? undefined : `Tu rol (${perfil}) no tiene permiso para crear plantillas`}
           >
             {submitting ? <Loader2 className="size-4 animate-spin" /> : 'Crear plantilla'}
           </Button>
