@@ -48,6 +48,7 @@ import {
   fetchChatAiConfig,
   fetchConversationMessages,
   fetchQuickReplies,
+  formatDisplayPhoneNumber,
   normalizeMessages,
   parseTimestamp,
   phoneThreadMessagesQueryKey,
@@ -111,17 +112,6 @@ function formatLastSeen(timestamp?: string): string | null {
   } catch {
     return null;
   }
-}
-
-function formatDisplayPhoneNumber(phoneNumber?: string): string | null {
-  if (!phoneNumber) return null;
-
-  const trimmedPhoneNumber = phoneNumber.trim();
-  if (!trimmedPhoneNumber) return null;
-  if (trimmedPhoneNumber.startsWith("+")) return trimmedPhoneNumber;
-  if (/^\d+$/.test(trimmedPhoneNumber)) return `+${trimmedPhoneNumber}`;
-
-  return trimmedPhoneNumber;
 }
 
 /** `onMedia`: cuando los checks van sobre la pastillita semitransparente de

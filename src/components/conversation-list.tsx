@@ -18,11 +18,13 @@ import {
   CONVERSATIONS_QUERY_KEY,
   type Conversation,
   type ConversationThread,
+  contactKeyFor,
   fetchConversations,
   fetchConversationStatuses,
   fetchConversationTags,
   fetchConversationZones,
   filterConversationThreads,
+  formatDisplayPhoneNumber,
   groupConversationsByPhoneNumber,
   loadStoredStringSet,
   parseTimestamp,
@@ -35,6 +37,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { NewChatDialog } from '@/components/new-chat-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { type StarredMessage } from '@/lib/starred-messages';
 import { getProfileStyle } from '@/lib/mock-profiles';
 import { getAssignableZones, MOCK_ZONE_OPTIONS } from '@/lib/mock-zones';
@@ -231,6 +240,15 @@ function formatThreadTimestamp(timestamp?: string): string {
   } catch {
     return '';
   }
+}
+
+/** Funcionalidad "Detectar contacto en varios números": nombre legible del
+ * número de WhatsApp de la EMPRESA al que corresponde este chat — mismo
+ * criterio de fallback que ya usa message-view.tsx para el "via ..." de la
+ * cabecera (nombre configurado en Kapso → teléfono de la empresa → id
+ * crudo como último recurso, por si ninguno de los dos llegó). */
+function inboxLabelForThread(thread: ConversationThread): string {
+  return thread.inboxDisplayName || formatDisplayPhoneNumber(thread.inboxPhoneNumber) || thread.phoneNumberId;
 }
 
 type Props = {
@@ -645,6 +663,42 @@ export function ConversationList({
     [conversations],
   );
 
+  /** Funcionalidad "Detectar contacto en varios números": agrupa los
+   * threads por identidad de CONTACTO (contactKeyFor, sin el phoneNumberId
+   * — lo opuesto a como threadKeyFor ya los separa hoy). Un contacto que
+   * escribió a dos números distintos de la empresa termina con 2+ entradas
+   * en el mismo grupo acá — eso es justo lo que detecta handleOpenThread
+   * más abajo para ofrecer el popup "¿cuál conversación querés ver?". Los
+   * chats sin teléfono real ni business_scoped_user_id (contactKeyFor
+   * devuelve undefined) quedan afuera a propósito: no hay identidad
+   * confiable para cruzarlos con otro número. */
+  const contactSiblingsMap = useMemo(() => {
+    const map = new Map<string, ConversationThread[]>();
+    threads.forEach((thread) => {
+      const key = contactKeyFor(thread.phoneNumber, thread.businessScopedUserId);
+      if (!key) return;
+      const group = map.get(key);
+      if (group) {
+        group.push(thread);
+      } else {
+        map.set(key, [thread]);
+      }
+    });
+    return map;
+  }, [threads]);
+
+  // Funcionalidad "Detectar contacto en varios números": qué contactos ya
+  // mostraron el popup en esta sesión (se resetea al recargar la página,
+  // como cualquier otro estado de React) — así solo se pregunta la PRIMERA
+  // vez que se abre cualquiera de los chats de ese contacto; las veces
+  // siguientes, cualquiera de esos chats se abre directo, sin repetir la
+  // pregunta. No guarda CUÁL eligió la persona la primera vez a propósito:
+  // si guardara la elección y redirigiera siempre ahí, hacer clic en el
+  // chat de Medellín y terminar en el de Bogotá se sentiría como un bug,
+  // no como una ayuda.
+  const promptedContactKeysRef = useRef<Set<string>>(new Set());
+  const [contactPickerThreads, setContactPickerThreads] = useState<ConversationThread[] | null>(null);
+
   // Funcionalidad "Números/Zonas": este es el filtro de VISTA manual (elegir
   // una zona puntual dentro de lo que ya te llegó del servidor) — el control
   // de acceso real por rol ya pasó server-side en /api/conversations, esto
@@ -801,10 +855,36 @@ export function ConversationList({
   };
 
   /** Abrir un chat siempre cuenta como leerlo, aunque se haya marcado manualmente como no leído. */
-  const handleOpenThread = (thread: ConversationThread) => {
+  const openThreadDirectly = (thread: ConversationThread) => {
     onSelectThread(thread);
     markThreadSeen(thread);
     clearManuallyUnread(thread);
+  };
+
+  /** Funcionalidad "Detectar contacto en varios números": si el contacto de
+   * este chat también tiene otra conversación abierta con un número
+   * DISTINTO de la empresa, y todavía no se le mostró el popup en esta
+   * sesión, lo abre en vez de abrir el chat directo — ver
+   * contactSiblingsMap/promptedContactKeysRef más arriba y el <Dialog/> más
+   * abajo en el render. */
+  const handleOpenThread = (thread: ConversationThread) => {
+    const contactKey = contactKeyFor(thread.phoneNumber, thread.businessScopedUserId);
+    const siblings = contactKey ? contactSiblingsMap.get(contactKey) : undefined;
+
+    if (contactKey && siblings && siblings.length > 1 && !promptedContactKeysRef.current.has(contactKey)) {
+      promptedContactKeysRef.current.add(contactKey);
+      setContactPickerThreads(siblings);
+      return;
+    }
+
+    openThreadDirectly(thread);
+  };
+
+  /** Elegir uno de los chats del popup de "Detectar contacto en varios
+   * números" — lo cierra y abre ese chat normalmente. */
+  const handleChooseContactThread = (thread: ConversationThread) => {
+    setContactPickerThreads(null);
+    openThreadDirectly(thread);
   };
 
   /** Funcionalidad "Marcar todos como leídos" — botón del menú "⋮". */
@@ -2243,6 +2323,36 @@ export function ConversationList({
         onOpenChange={setIsNewChatOpen}
         onOpenChat={onOpenNewChat}
       />
+
+      {/* Funcionalidad "Detectar contacto en varios números": ver
+          contactSiblingsMap/handleOpenThread más arriba. Cerrar el diálogo
+          sin elegir (X, Escape, clic afuera) simplemente no abre ningún
+          chat — la persona puede volver a hacer clic en la fila cuando
+          quiera, sin que vuelva a preguntar (ya quedó marcado como
+          "preguntado" en promptedContactKeysRef apenas se abrió). */}
+      <Dialog open={contactPickerThreads !== null} onOpenChange={(open) => { if (!open) setContactPickerThreads(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Este contacto te escribió a varios números</DialogTitle>
+            <DialogDescription>
+              {contactPickerThreads?.[0]?.contactName || contactPickerThreads?.[0]?.phoneNumber} también tiene conversación abierta en otro número de la empresa. ¿Cuál querés ver?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            {contactPickerThreads?.map((thread) => (
+              <Button
+                key={thread.key}
+                type="button"
+                variant="outline"
+                onClick={() => handleChooseContactThread(thread)}
+                className="h-auto w-full justify-start rounded-md px-3 py-2 text-left"
+              >
+                Ver {inboxLabelForThread(thread)}
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
