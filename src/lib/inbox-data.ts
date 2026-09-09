@@ -254,23 +254,6 @@ export async function fetchQuickReplies(): Promise<QuickReply[]> {
   return data.quickReplies || [];
 }
 
-export const TAGS_CATALOG_QUERY_KEY = ['tags-catalog'] as const;
-
-/** Funcionalidad "Etiquetar Perfiles": catálogo de etiquetas disponibles
- * (ver src/lib/tags.ts) — solo hace falta para el dropdown de asignación
- * (permiso "escribir"), no para ver la etiqueta ya asignada de un chat
- * (eso es CONVERSATION_TAG_QUERY_KEY, abajo). */
-export async function fetchTagsCatalog(): Promise<string[]> {
-  const response = await fetch('/api/tags-catalog');
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Failed to fetch tags catalog');
-  }
-
-  return data.tags || [];
-}
-
 export const CONVERSATION_TAG_QUERY_KEY = ['conversation-tag'] as const;
 
 /** Funcionalidad "Etiquetar Perfiles": etiqueta asignada a cada chat (ver

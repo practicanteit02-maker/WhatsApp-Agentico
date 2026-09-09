@@ -1,18 +1,20 @@
 import { NextResponse } from 'next/server';
 import { checkZoneAccess } from '@/lib/conversation-zones';
-import { getAllConversationTags, setConversationTag, tagExistsInCatalog } from '@/lib/tags';
+import { getAllConversationTags, setConversationTag } from '@/lib/tags';
 import { requierePermiso } from '@/lib/require-permission';
 
+const MAX_TAG_LENGTH = 40;
+
 /**
- * Etiqueta asignada a cada chat (ver src/lib/tags.ts). GET requiere estar
- * logueado con un rol válido (permiso "leer") — a diferencia del catálogo
- * completo (/api/tags-catalog, detrás de "escribir"), ver qué etiqueta
- * tiene YA asignada un chat puntual es lectura normal, igual que zona/
- * estado. POST ("asignar") requiere "escribir" — a pedido explícito, NO
- * "editar" (que hoy es exclusivo de Administrador y solo aplica a
- * zona/estado) — y además pasa por checkZoneAccess, el mismo control que
- * protege el resto de los endpoints de un chat puntual: un no-Administrador
- * solo puede etiquetar un chat de su propia zona.
+ * Etiqueta asignada a cada chat (ver src/lib/tags.ts) — texto libre, sin
+ * catálogo predefinido. GET requiere estar logueado con un rol válido
+ * (permiso "leer") — ver qué etiqueta tiene YA asignada un chat puntual es
+ * lectura normal, igual que zona/estado. POST ("escribir/editar la
+ * etiqueta") requiere "escribir" — a pedido explícito, NO "editar" (que hoy
+ * es exclusivo de Administrador y solo aplica a zona/estado) — y además
+ * pasa por checkZoneAccess, el mismo control que protege el resto de los
+ * endpoints de un chat puntual: un no-Administrador solo puede etiquetar un
+ * chat de su propia zona.
  */
 export async function GET() {
   const denegado = await requierePermiso('leer');
@@ -27,12 +29,16 @@ export async function POST(request: Request) {
   if (denegado) return denegado;
 
   const body = await request.json().catch(() => null) as { threadKey?: string; etiqueta?: string } | null;
-  if (!body?.threadKey || !body.etiqueta) {
+  if (!body?.threadKey || typeof body.etiqueta !== 'string') {
     return NextResponse.json({ error: 'Missing threadKey or etiqueta' }, { status: 400 });
   }
 
-  if (!(await tagExistsInCatalog(body.etiqueta))) {
-    return NextResponse.json({ error: `Etiqueta inválida: ${body.etiqueta}` }, { status: 400 });
+  const etiqueta = body.etiqueta.trim();
+  if (!etiqueta) {
+    return NextResponse.json({ error: 'La etiqueta no puede estar vacía' }, { status: 400 });
+  }
+  if (etiqueta.length > MAX_TAG_LENGTH) {
+    return NextResponse.json({ error: `La etiqueta no puede superar los ${MAX_TAG_LENGTH} caracteres` }, { status: 400 });
   }
 
   const access = await checkZoneAccess(body.threadKey);
@@ -40,6 +46,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
-  await setConversationTag(body.threadKey, body.etiqueta);
+  await setConversationTag(body.threadKey, etiqueta);
   return NextResponse.json({ ok: true });
 }

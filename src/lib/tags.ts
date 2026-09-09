@@ -1,23 +1,24 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, DeleteCommand, GetCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 /**
- * Funcionalidad "Etiquetar Perfiles": una etiqueta única por conversación
- * (ej. "Modelo X", "Sede Bogotá") para clasificar/filtrar chats — mismo
- * concepto que Zona (src/lib/conversation-zones.ts), salvo que la lista de
- * valores posibles no es un enum fijo en código (ver mock-zones.ts) sino un
- * catálogo editable en DynamoDB. Por eso este archivo maneja DOS tablas en
- * vez de una:
+ * Funcionalidad "Etiquetar Perfiles": una etiqueta de texto libre por
+ * conversación (como una nota corta, ej. "Modelo X", "Sede Bogotá") para
+ * clasificar/identificar chats — mismo concepto que Zona
+ * (src/lib/conversation-zones.ts) en que es un único valor reasignable por
+ * chat, pero sin catálogo predefinido: cualquiera con permiso "escribir"
+ * escribe el texto que quiera directamente sobre el chat (ver
+ * /api/conversation-tag/route.ts, que valida no-vacío y longitud máxima).
  *
- * - "etiquetas-catalogo": qué etiquetas existen para elegir. Partición
- *   `etiqueta` (el nombre, ej. "Modelo X"), sin otro atributo — a
- *   propósito simple, sin color por etiqueta, mismo criterio que Zona (los
- *   pills de zona tampoco tienen color por-zona, todos comparten el mismo
- *   estilo visual).
- * - "conversaciones-etiqueta": qué etiqueta tiene cada chat. Partición
- *   `threadKey` (el mismo identificador que usan "conversaciones-zonas" y
- *   "conversaciones-ai-config"), atributo `etiqueta`. Un chat sin fila
- *   todavía = sin etiqueta asignada.
+ * Tabla "conversaciones-etiqueta": partición `threadKey` (el mismo
+ * identificador que usan "conversaciones-zonas" y "conversaciones-ai-config"),
+ * atributo `etiqueta`. Un chat sin fila todavía = sin etiqueta asignada.
+ *
+ * Nota: este archivo manejaba antes también un catálogo compartido de
+ * etiquetas ("etiquetas-catalogo") — se eliminó ese concepto a pedido
+ * explícito (etiqueta = texto libre, no una lista de donde elegir). La
+ * tabla "etiquetas-catalogo" puede seguir existiendo en DynamoDB sin uso, no
+ * hace falta borrarla.
  *
  * Mismo patrón de cliente que conversation-zones.ts: sin credenciales
  * explícitas (cadena de credenciales por defecto de AWS), misma región.
@@ -26,61 +27,7 @@ const dynamoClient = DynamoDBDocumentClient.from(
   new DynamoDBClient({ region: 'us-east-2' })
 );
 
-const TAGS_CATALOG_TABLE = 'etiquetas-catalogo';
 const CONVERSATION_TAG_TABLE = 'conversaciones-etiqueta';
-
-// --- Catálogo de etiquetas disponibles ---
-
-/** Trae todo el catálogo — lo usan tanto /api/tags-catalog como la
- * validación de /api/conversation-tag (para no dejar asignar una etiqueta
- * que no exista). Un `scan` completo es razonable acá porque la tabla es
- * chica (una fila por etiqueta, no por chat ni por mensaje). */
-export async function getTagsCatalog(): Promise<string[]> {
-  const tags: string[] = [];
-  try {
-    let lastEvaluatedKey: Record<string, unknown> | undefined;
-    do {
-      const result = await dynamoClient.send(
-        new ScanCommand({ TableName: TAGS_CATALOG_TABLE, ExclusiveStartKey: lastEvaluatedKey })
-      );
-      for (const item of result.Items ?? []) {
-        if (typeof item.etiqueta === 'string') {
-          tags.push(item.etiqueta);
-        }
-      }
-      lastEvaluatedKey = result.LastEvaluatedKey;
-    } while (lastEvaluatedKey);
-  } catch (error) {
-    console.error('No se pudo escanear "etiquetas-catalogo" en DynamoDB:', error);
-  }
-  return tags.sort((a, b) => a.localeCompare(b));
-}
-
-export async function tagExistsInCatalog(etiqueta: string): Promise<boolean> {
-  try {
-    const result = await dynamoClient.send(
-      new GetCommand({ TableName: TAGS_CATALOG_TABLE, Key: { etiqueta } })
-    );
-    return Boolean(result.Item);
-  } catch (error) {
-    console.error('No se pudo consultar "etiquetas-catalogo" en DynamoDB:', error);
-    return false;
-  }
-}
-
-export async function addTagToCatalog(etiqueta: string): Promise<void> {
-  await dynamoClient.send(
-    new PutCommand({ TableName: TAGS_CATALOG_TABLE, Item: { etiqueta } })
-  );
-}
-
-export async function deleteTagFromCatalog(etiqueta: string): Promise<void> {
-  await dynamoClient.send(
-    new DeleteCommand({ TableName: TAGS_CATALOG_TABLE, Key: { etiqueta } })
-  );
-}
-
-// --- Etiqueta asignada a cada chat ---
 
 export async function getConversationTag(threadKey: string): Promise<string | undefined> {
   try {
