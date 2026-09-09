@@ -20,7 +20,7 @@ export type MockAccountProfile = Rol;
 type ProfileStyle = { initial: string; color: string };
 
 const PROFILE_STYLES: Record<MockAccountProfile, ProfileStyle> = {
-  Administrador: { initial: 'A', color: 'rgb(111, 0, 255)' },
+  Administrador: { initial: 'A', color: 'rgb(220, 38, 38)' },
   Coordinadora: { initial: 'C', color: 'rgb(34, 160, 107)' },
   QA: { initial: 'QA', color: '#2f8fd8' },
 };

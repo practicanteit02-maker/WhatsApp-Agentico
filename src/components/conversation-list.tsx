@@ -1765,9 +1765,80 @@ export function ConversationList({
                     </div>
                     <div className="flex min-w-0 flex-1 items-start justify-between gap-2 overflow-hidden">
                       <div className="min-w-0 flex-1 overflow-hidden">
-                        <p className="truncate text-sm font-semibold leading-5 text-foreground">
-                          {thread.contactName || thread.phoneNumber || 'Unknown phone number'}
-                        </p>
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <span className="min-w-0 truncate text-sm font-semibold leading-5 text-foreground">
+                            {thread.contactName || thread.phoneNumber || 'Unknown phone number'}
+                          </span>
+
+                          {/* Píldora con la etiqueta de texto libre de este
+                              chat (ver src/lib/tags.ts) — a pedido explícito,
+                              pegada al nombre del contacto en la misma línea
+                              (no en la columna apilada de zona/estado/hora a
+                              la derecha, que se queda solo con eso).
+                              Escribirla es la acción "escribir" de la
+                              matriz de permisos (Administrador y
+                              Coordinador), no "editar". Sin etiqueta
+                              asignada, el pill queda con solo el ícono. */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              if (!canEtiquetar) return;
+                              e.stopPropagation();
+                              setTagEditorPosition({ top: e.clientY, right: window.innerWidth - e.clientX });
+                              setTagInputValue(etiqueta ?? '');
+                              setTagEditorThreadKey(thread.key);
+                            }}
+                            disabled={!canEtiquetar}
+                            title={canEtiquetar ? undefined : `Tu rol (${sessionPerfil}) no tiene permiso para escribir una etiqueta`}
+                            className={cn(
+                              'inline-flex max-w-[6rem] flex-shrink-0 items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-primary',
+                              canEtiquetar ? 'hover:bg-primary/25' : 'cursor-not-allowed opacity-50',
+                            )}
+                          >
+                            <Tags className="size-2.5 flex-shrink-0" />
+                            {etiqueta && <span className="truncate">{etiqueta}</span>}
+                          </button>
+
+                          {tagEditorThreadKey === thread.key && tagEditorPosition && createPortal(
+                            <div
+                              role="menu"
+                              aria-label="Escribir etiqueta"
+                              data-tag-editor
+                              style={{ position: 'fixed', top: tagEditorPosition.top, right: tagEditorPosition.right }}
+                              className="z-50 w-48 rounded-md border border-[var(--chat-border-strong)] bg-popover p-2 text-popover-foreground shadow-lg"
+                            >
+                              <input
+                                autoFocus
+                                type="text"
+                                value={tagInputValue}
+                                maxLength={40}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => setTagInputValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  e.stopPropagation();
+                                  if (e.key !== 'Enter') return;
+                                  const trimmed = tagInputValue.trim();
+                                  if (trimmed) assignTag(thread.key, trimmed);
+                                }}
+                                placeholder="Escribe una etiqueta..."
+                                className="h-8 w-full rounded border border-[var(--chat-border-strong)] bg-[var(--chat-input)] px-2 text-xs text-foreground outline-none focus:border-primary"
+                              />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const trimmed = tagInputValue.trim();
+                                  if (trimmed) assignTag(thread.key, trimmed);
+                                }}
+                                disabled={!tagInputValue.trim()}
+                                className="mt-1.5 flex h-7 w-full items-center justify-center rounded bg-primary text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Guardar
+                              </button>
+                            </div>,
+                            document.body
+                          )}
+                        </div>
                         {thread.lastMessage && (
                           <p className="mt-1 flex items-center gap-1 truncate text-xs leading-4 text-muted-foreground">
                             {thread.lastMessage.direction === 'outbound' && (
@@ -1799,76 +1870,6 @@ export function ConversationList({
                         )}
                       </div>
                       <div className="ml-2 flex flex-shrink-0 flex-col items-end gap-1 pt-0.5">
-                        {/* Píldora con la etiqueta de texto libre de este
-                            chat (ver src/lib/tags.ts) — a pedido explícito,
-                            va en su propia fila por encima de zona/estado
-                            (primer elemento de esta columna, a la misma
-                            altura que el nombre del contacto). Escribirla es
-                            la acción "escribir" de la matriz de permisos
-                            (Administrador y Coordinador), no "editar". Sin
-                            etiqueta asignada, el pill queda con solo el
-                            ícono — más limpio que un texto placeholder tipo
-                            "Sin etiqueta" ocupando espacio en cada tarjeta. */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            if (!canEtiquetar) return;
-                            e.stopPropagation();
-                            setTagEditorPosition({ top: e.clientY, right: window.innerWidth - e.clientX });
-                            setTagInputValue(etiqueta ?? '');
-                            setTagEditorThreadKey(thread.key);
-                          }}
-                          disabled={!canEtiquetar}
-                          title={canEtiquetar ? undefined : `Tu rol (${sessionPerfil}) no tiene permiso para escribir una etiqueta`}
-                          className={cn(
-                            'inline-flex max-w-[7rem] items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-primary',
-                            canEtiquetar ? 'hover:bg-primary/25' : 'cursor-not-allowed opacity-50',
-                          )}
-                        >
-                          <Tags className="size-2.5 flex-shrink-0" />
-                          {etiqueta && <span className="truncate">{etiqueta}</span>}
-                        </button>
-
-                        {tagEditorThreadKey === thread.key && tagEditorPosition && createPortal(
-                          <div
-                            role="menu"
-                            aria-label="Escribir etiqueta"
-                            data-tag-editor
-                            style={{ position: 'fixed', top: tagEditorPosition.top, right: tagEditorPosition.right }}
-                            className="z-50 w-48 rounded-md border border-[var(--chat-border-strong)] bg-popover p-2 text-popover-foreground shadow-lg"
-                          >
-                            <input
-                              autoFocus
-                              type="text"
-                              value={tagInputValue}
-                              maxLength={40}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => setTagInputValue(e.target.value)}
-                              onKeyDown={(e) => {
-                                e.stopPropagation();
-                                if (e.key !== 'Enter') return;
-                                const trimmed = tagInputValue.trim();
-                                if (trimmed) assignTag(thread.key, trimmed);
-                              }}
-                              placeholder="Escribe una etiqueta..."
-                              className="h-8 w-full rounded border border-[var(--chat-border-strong)] bg-[var(--chat-input)] px-2 text-xs text-foreground outline-none focus:border-primary"
-                            />
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const trimmed = tagInputValue.trim();
-                                if (trimmed) assignTag(thread.key, trimmed);
-                              }}
-                              disabled={!tagInputValue.trim()}
-                              className="mt-1.5 flex h-7 w-full items-center justify-center rounded bg-primary text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              Guardar
-                            </button>
-                          </div>,
-                          document.body
-                        )}
-
                         {/* Píldora con la zona real de este chat (ver
                             src/lib/conversation-zones.ts) — reasignarla es la
                             acción "editar" de la matriz de permisos (ver
