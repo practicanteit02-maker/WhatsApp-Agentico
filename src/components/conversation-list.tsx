@@ -6,20 +6,24 @@ import Link from 'next/link';
 import { format, isToday, isValid, isYesterday } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { signOut, useSession } from 'next-auth/react';
-import { Archive, ArchiveRestore, ArrowLeft, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, Search, Settings, Square, SquarePen, Star, Tag, TriangleAlert, User, UserCog, Users, Video, X, Zap } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowLeft, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, Search, Settings, Square, SquarePen, Star, Tag, Tags, TriangleAlert, User, UserCog, Users, Video, X, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useInboxLiveUpdates } from '@/hooks/use-inbox-live-updates';
 import type { ChatCollabPayload } from '@/lib/event-bus';
 import { playReceivedMessageSound, playSentMessageSound } from '@/lib/notification-sounds';
 import {
   CONVERSATION_STATUS_QUERY_KEY,
+  CONVERSATION_TAG_QUERY_KEY,
   CONVERSATION_ZONES_QUERY_KEY,
   CONVERSATIONS_QUERY_KEY,
+  TAGS_CATALOG_QUERY_KEY,
   type Conversation,
   type ConversationThread,
   fetchConversations,
   fetchConversationStatuses,
+  fetchConversationTags,
   fetchConversationZones,
+  fetchTagsCatalog,
   filterConversationThreads,
   groupConversationsByPhoneNumber,
   loadStoredStringSet,
@@ -503,6 +507,70 @@ export function ConversationList({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [statusEditorThreadKey]);
+
+  // Funcionalidad "Etiquetar Perfiles" (ver src/lib/tags.ts): mismo patrón
+  // que zona/estado de arriba, salvo el permiso — asignar una etiqueta es
+  // la acción "escribir" (Administrador y Coordinador), no "editar" (hoy
+  // exclusiva de Administrador). El catálogo de opciones solo se pide si
+  // el rol puede asignar de todas formas (el dropdown nunca se abre si
+  // no) — mismo criterio que quick-replies en message-view.tsx.
+  const canEtiquetar = puedeSePuede(sessionPerfil, 'escribir');
+
+  const { data: tagMap = {} } = useQuery({
+    queryKey: CONVERSATION_TAG_QUERY_KEY,
+    queryFn: fetchConversationTags,
+    refetchInterval: 30_000,
+  });
+
+  const { data: tagsCatalog = [] } = useQuery({
+    queryKey: TAGS_CATALOG_QUERY_KEY,
+    queryFn: fetchTagsCatalog,
+    enabled: canEtiquetar,
+    staleTime: 30_000,
+  });
+
+  const [tagEditorThreadKey, setTagEditorThreadKey] = useState<string | null>(null);
+  const [tagEditorPosition, setTagEditorPosition] = useState<{ top: number; right: number } | null>(null);
+
+  const assignTag = async (threadKey: string, etiqueta: string) => {
+    setTagEditorThreadKey(null);
+    try {
+      const response = await fetch('/api/conversation-tag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadKey, etiqueta }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'Failed to assign tag');
+      }
+      queryClient.invalidateQueries({ queryKey: CONVERSATION_TAG_QUERY_KEY });
+    } catch (error) {
+      console.error('No se pudo asignar la etiqueta:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!tagEditorThreadKey) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target as HTMLElement).closest('[data-tag-editor]')) {
+        setTagEditorThreadKey(null);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setTagEditorThreadKey(null);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [tagEditorThreadKey]);
 
   // En el instante en que el webhook registra un mensaje nuevo, actualiza la
   // vista previa de este chat directamente para que se refleje al instante
@@ -1617,6 +1685,10 @@ export function ConversationList({
               // — "Nuevo" si todavía no tiene fila en la tabla.
               const status: ChatStatus = (statusMap[thread.key] as ChatStatus | undefined) ?? 'Nuevo';
 
+              // Etiqueta de este chat (ver src/lib/tags.ts) — undefined si
+              // todavía no tiene una asignada.
+              const etiqueta = tagMap[thread.key];
+
               return (
                 <div
                   key={thread.key}
@@ -1854,6 +1926,73 @@ export function ConversationList({
                           document.body
                         )}
 
+                        {/* Píldora con la etiqueta de este chat (ver
+                            src/lib/tags.ts) — mismo patrón visual que zona/
+                            estado, pero asignarla es la acción "escribir"
+                            de la matriz de permisos (Administrador y
+                            Coordinador), no "editar" (hoy exclusiva de
+                            Administrador). Sin etiqueta asignada, el pill
+                            queda con solo el ícono (sin texto) — mismo
+                            criterio que zona cuando no tiene ninguna. */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            if (!canEtiquetar) return;
+                            e.stopPropagation();
+                            setTagEditorPosition({ top: e.clientY, right: window.innerWidth - e.clientX });
+                            setTagEditorThreadKey(thread.key);
+                          }}
+                          disabled={!canEtiquetar}
+                          title={canEtiquetar ? undefined : `Tu rol (${sessionPerfil}) no tiene permiso para asignar etiquetas`}
+                          className={cn(
+                            'inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-primary',
+                            canEtiquetar ? 'hover:bg-primary/25' : 'cursor-not-allowed opacity-50',
+                          )}
+                        >
+                          <Tags className="size-2.5 flex-shrink-0" />
+                          {etiqueta && <span className="truncate">{etiqueta}</span>}
+                        </button>
+
+                        {tagEditorThreadKey === thread.key && tagEditorPosition && createPortal(
+                          <div
+                            role="menu"
+                            aria-label="Asignar etiqueta"
+                            data-tag-editor
+                            style={{ position: 'fixed', top: tagEditorPosition.top, right: tagEditorPosition.right }}
+                            className="z-50 w-36 rounded-md border border-[var(--chat-border-strong)] bg-popover p-1 text-sm text-popover-foreground shadow-lg"
+                          >
+                            {tagsCatalog.length === 0 ? (
+                              <p className="px-2 py-2 text-xs text-muted-foreground">
+                                No hay etiquetas creadas todavía.
+                              </p>
+                            ) : (
+                              tagsCatalog.map((option) => {
+                                const isActive = option === etiqueta;
+
+                                return (
+                                  <button
+                                    key={option}
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      assignTag(thread.key, option);
+                                    }}
+                                    className={cn(
+                                      'flex h-8 w-full items-center justify-between gap-2 rounded px-2 text-left text-xs font-medium hover:bg-[var(--chat-hover)]',
+                                      isActive ? 'text-foreground' : 'text-muted-foreground',
+                                    )}
+                                  >
+                                    <span className="truncate">{option}</span>
+                                    {isActive && <Check className="size-3.5 flex-shrink-0 text-primary" />}
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>,
+                          document.body
+                        )}
+
                         {thread.lastMessage && (
                           <span className="text-[11px] leading-4 text-muted-foreground">
                             {formatThreadTimestamp(thread.lastActiveAt)}
@@ -1977,6 +2116,23 @@ export function ConversationList({
           >
             <Link href="/respuestas-rapidas">
               <Zap className="size-5" />
+            </Link>
+          </Button>
+        )}
+        {/* Funcionalidad "Etiquetar Perfiles": mismo criterio que
+            Respuestas rápidas — solo visible con permiso "escribir", ya
+            que gestionar el catálogo es esa misma acción. */}
+        {canEtiquetar && (
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="size-11 rounded-md border border-[var(--chat-border-strong)] text-muted-foreground hover:bg-[var(--chat-hover)] hover:text-foreground md:size-10"
+            aria-label="Etiquetas"
+            title="Etiquetas"
+          >
+            <Link href="/etiquetas">
+              <Tags className="size-5" />
             </Link>
           </Button>
         )}
