@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { format, isToday, isValid, isYesterday } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { signOut, useSession } from 'next-auth/react';
-import { Archive, ArchiveRestore, ArrowLeft, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, ScrollText, Search, Settings, Square, SquarePen, Star, Tag, Tags, TriangleAlert, User, UserCog, Users, Video, X, Zap } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowLeft, BarChart3, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, ScrollText, Search, Settings, Square, SquarePen, Star, Tag, Tags, TriangleAlert, User, UserCog, Users, Video, X, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useInboxLiveUpdates } from '@/hooks/use-inbox-live-updates';
 import type { ChatCollabPayload } from '@/lib/event-bus';
@@ -2226,6 +2226,23 @@ export function ConversationList({
           >
             <Link href="/auditoria">
               <ScrollText className="size-5" />
+            </Link>
+          </Button>
+        )}
+        {/* Funcionalidad "Dashboard de métricas": exclusivo de Administrador,
+            mismo patrón que auditoría — protegido también server-side (ver
+            src/app/metricas/page.tsx). */}
+        {esAdministrador(sessionPerfil) && (
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="size-11 rounded-md border border-[var(--chat-border-strong)] text-muted-foreground hover:bg-[var(--chat-hover)] hover:text-foreground md:size-10"
+            aria-label="Dashboard de métricas"
+            title="Dashboard de métricas"
+          >
+            <Link href="/metricas">
+              <BarChart3 className="size-5" />
             </Link>
           </Button>
         )}

@@ -306,3 +306,83 @@ export async function listarAuditoria(filtros: FiltrosAuditoria): Promise<Result
 
   return { registros, nextCursor: null };
 }
+
+export type AgregadoAuditoria = {
+  desde: string;
+  hasta: string;
+  totalAcciones: number;
+  /** Una entrada por persona que hizo al menos una acción en el rango,
+   * ordenada de más a menos acciones. `perfil` es el rol más reciente con
+   * el que aparece (el snapshot del registro más nuevo). */
+  porActor: Array<{ actor: string; perfil: string; total: number }>;
+  /** Un punto por CADA día del rango (incluidos los de cero), en orden
+   * ascendente, para que el gráfico de barras tenga el eje continuo. */
+  porDia: Array<{ dia: string; total: number }>;
+};
+
+/**
+ * Agrega los registros de "auditoria-panel" del rango de fechas para el
+ * Dashboard de métricas: total de acciones, acciones por persona y acciones
+ * por día. Recorre el rango día-por-día con el mismo `Query` que
+ * listarAuditoria (misma partición `dia`), pero solo cuenta — proyecta
+ * únicamente `actor`/`actorPerfil` y no materializa las filas completas.
+ * Lanza (con contexto) si la consulta falla, igual que listarAuditoria.
+ */
+export async function agregarAuditoria(desde: string, hasta: string): Promise<AgregadoAuditoria> {
+  const porActorMap = new Map<string, { perfil: string; total: number }>();
+  const porDiaMap = new Map<string, number>();
+  let totalAcciones = 0;
+
+  try {
+    for (const dia of diasDescendentes(desde, hasta)) {
+      // Deja el día en el mapa aunque no tenga acciones, para que el gráfico
+      // muestre la barra en cero en vez de saltarse la fecha.
+      if (!porDiaMap.has(dia)) porDiaMap.set(dia, 0);
+
+      let exclusiveStartKey: Record<string, unknown> | undefined;
+      do {
+        const salida = await dynamoClient.send(
+          new QueryCommand({
+            TableName: AUDIT_TABLE,
+            KeyConditionExpression: '#dia = :dia',
+            ProjectionExpression: '#actor, #actorPerfil',
+            ExpressionAttributeNames: {
+              '#dia': 'dia',
+              '#actor': 'actor',
+              '#actorPerfil': 'actorPerfil',
+            },
+            ExpressionAttributeValues: { ':dia': dia },
+            ExclusiveStartKey: exclusiveStartKey,
+          })
+        );
+        for (const item of salida.Items ?? []) {
+          const actor = typeof item.actor === 'string' ? item.actor : 'desconocido';
+          const perfil = typeof item.actorPerfil === 'string' ? item.actorPerfil : 'Sin asignar';
+          totalAcciones += 1;
+          porDiaMap.set(dia, (porDiaMap.get(dia) ?? 0) + 1);
+          const previo = porActorMap.get(actor);
+          // diasDescendentes va del más nuevo al más viejo, así que el primer
+          // perfil que se ve para un actor es el más reciente — se conserva.
+          porActorMap.set(actor, {
+            perfil: previo?.perfil ?? perfil,
+            total: (previo?.total ?? 0) + 1,
+          });
+        }
+        exclusiveStartKey = salida.LastEvaluatedKey as Record<string, unknown> | undefined;
+      } while (exclusiveStartKey);
+    }
+  } catch (error) {
+    console.error('No se pudo agregar "auditoria-panel" en DynamoDB:', error);
+    throw new Error('No se pudieron calcular las métricas de auditoría en DynamoDB');
+  }
+
+  const porActor = Array.from(porActorMap.entries())
+    .map(([actor, { perfil, total }]) => ({ actor, perfil, total }))
+    .sort((a, b) => b.total - a.total || a.actor.localeCompare(b.actor));
+
+  const porDia = Array.from(porDiaMap.entries())
+    .map(([dia, total]) => ({ dia, total }))
+    .sort((a, b) => a.dia.localeCompare(b.dia));
+
+  return { desde, hasta, totalAcciones, porActor, porDia };
+}
