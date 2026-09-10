@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { deleteUser, getAllUsers, getUser, setUser } from '@/lib/panel-users';
-import { esRolValido } from '@/lib/permissions';
+import { esAdministrador, esRolValido } from '@/lib/permissions';
 import { isAssignableZone } from '@/lib/mock-zones';
 
 /**
@@ -16,7 +16,11 @@ import { isAssignableZone } from '@/lib/mock-zones';
  */
 async function requireAdministrador() {
   const session = await auth();
-  if (session?.user?.perfil !== 'Administrador') {
+  // esAdministrador() (en vez de comparar contra el literal 'Administrador'
+  // a mano) para que "Administradora" — alias femenino, ver ALIAS_ROLES en
+  // src/lib/permissions.ts — también cuente, igual que en /settings y en el
+  // resto del sistema.
+  if (!esAdministrador(session?.user?.perfil)) {
     return NextResponse.json({ error: 'Solo un Administrador puede gestionar usuarios' }, { status: 403 });
   }
   return null;

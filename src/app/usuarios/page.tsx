@@ -2,20 +2,21 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ArrowLeft, ShieldAlert, Users } from 'lucide-react';
 import { auth } from '@/auth';
+import { esAdministrador } from '@/lib/permissions';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { UserManager } from '@/components/user-manager';
 
 /**
  * Página de Ajustes > Usuarios (solo Administrador). A diferencia de
- * /plantillas y /settings (componentes de cliente que no verifican el
- * perfil), acá el chequeo se hace server-side, antes de mandar nada al
- * navegador: la lista completa de correos del equipo es información de
- * cuenta, así que ni siquiera se intenta cargar la UI si la persona no es
- * Administrador. El middleware (src/middleware.ts) ya garantiza que solo se
- * llega hasta acá con una sesión real — el `redirect('/login')` de abajo es
- * un respaldo por si alguna vez cambia esa garantía, no la primera línea de
- * defensa.
+ * /plantillas (componente de cliente que no verifica el perfil), acá el
+ * chequeo se hace server-side, antes de mandar nada al navegador: la lista
+ * completa de correos del equipo es información de cuenta, así que ni
+ * siquiera se intenta cargar la UI si la persona no es Administrador —
+ * mismo patrón que /settings/page.tsx. El middleware (src/middleware.ts) ya
+ * garantiza que solo se llega hasta acá con una sesión real — el
+ * `redirect('/login')` de abajo es un respaldo por si alguna vez cambia esa
+ * garantía, no la primera línea de defensa.
  */
 export default async function UsuariosPage() {
   const session = await auth();
@@ -24,7 +25,11 @@ export default async function UsuariosPage() {
     redirect('/login');
   }
 
-  if (session.user.perfil !== 'Administrador') {
+  // esAdministrador() (en vez de comparar contra el literal 'Administrador'
+  // a mano) para que "Administradora" — alias femenino, ver ALIAS_ROLES en
+  // src/lib/permissions.ts — también tenga acceso completo, consistente con
+  // /settings y el resto del sistema.
+  if (!esAdministrador(session.user.perfil)) {
     return (
       <div className="flex h-dvh min-h-dvh items-center justify-center bg-background px-4 text-foreground">
         <div className="w-full max-w-sm rounded-2xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface)] p-8 text-center shadow-lg">
