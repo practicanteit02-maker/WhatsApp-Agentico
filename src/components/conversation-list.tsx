@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { format, isToday, isValid, isYesterday } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { signOut, useSession } from 'next-auth/react';
-import { Archive, ArchiveRestore, ArrowLeft, BarChart3, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, ScrollText, Search, Settings, Square, SquarePen, Star, Tag, Tags, TriangleAlert, User, UserCog, Users, Video, X, Zap } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowLeft, BarChart3, Bell, BellOff, Check, CheckCheck, CheckSquare, ChevronDown, FileText, Image as ImageIcon, LayoutTemplate, ListChecks, LogOut, Mail, MailOpen, MapPin, Mic, MoreVertical, RefreshCw, ScrollText, Search, Settings, ShieldCheck, Square, SquarePen, Star, Tag, Tags, TriangleAlert, User, UserCog, Users, Video, X, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useInboxLiveUpdates } from '@/hooks/use-inbox-live-updates';
 import type { ChatCollabPayload } from '@/lib/event-bus';
@@ -308,6 +308,10 @@ export function ConversationList({
   const [openRowMenuKey, setOpenRowMenuKey] = useState<string | null>(null);
   const [rowMenuPosition, setRowMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [isOverflowMenuOpen, setIsOverflowMenuOpen] = useState(false);
+  // Funcionalidad "Menú de administración": agrupa en un solo desplegable los
+  // accesos exclusivos de Administrador de la barra inferior (Ajustes,
+  // Usuarios, Auditoría, Métricas) que antes eran cuatro íconos sueltos.
+  const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
   // --- Funcionalidad "Seleccionar chats": modo de selección múltiple para
   // aplicar acciones (leído/no leído, archivar) a varios chats de una vez.
   // Ver toggleSelectMode, toggleThreadSelectedForBulk y los handlers
@@ -352,6 +356,7 @@ export function ConversationList({
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const zoneMenuRef = useRef<HTMLDivElement>(null);
   const overflowMenuRef = useRef<HTMLDivElement>(null);
+  const adminMenuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const previousThreadSnapshotsRef = useRef<Map<string, ThreadNotificationSnapshot>>(new Map());
   const hasInitializedNotificationSnapshotsRef = useRef(false);
@@ -1120,6 +1125,28 @@ export function ConversationList({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOverflowMenuOpen]);
+
+  useEffect(() => {
+    if (!isAdminMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!adminMenuRef.current?.contains(event.target as Node)) {
+        setIsAdminMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsAdminMenuOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isAdminMenuOpen]);
 
   const notificationsActive = notificationsEnabled && notificationPermission === 'granted';
   const notificationsButtonTitle =
@@ -2147,26 +2174,59 @@ export function ConversationList({
           divisorias de abajo queden a la misma altura y no se vean
           disparejas contra la línea vertical que separa ambos paneles. */}
       <div className="flex flex-shrink-0 items-center gap-2 border-t border-[var(--chat-border-strong)] bg-[var(--chat-surface)] px-3 py-2 sm:py-3">
-        {/* Funcionalidad "RBAC": el ícono de Ajustes (número de teléfonos
-            rastreados) queda exclusivo de Administrador, mismo helper que
-            ya usa el botón de Usuarios más abajo en esta misma barra —
-            Coordinador y QA ni lo ven en el DOM. La pantalla en sí también
-            queda protegida server-side (ver src/app/settings/page.tsx),
-            así que esto es solo para no mostrar un acceso que de todas
-            formas va a rebotar. */}
+        {/* Funcionalidad "Menú de administración": los accesos exclusivos de
+            Administrador (Ajustes, Usuarios, Auditoría, Métricas) — antes
+            cuatro íconos sueltos que saturaban la barra — van agrupados acá
+            en un solo desplegable. Sigue el mismo mecanismo que el menú "⋮"
+            del header (ref + pointerdown/Escape) y abre hacia arriba, como el
+            de apariencia, porque vive pegado al borde de abajo. Cada pantalla
+            además está protegida server-side por su cuenta (ver
+            src/app/{settings,usuarios,auditoria,metricas}/page.tsx). */}
         {esAdministrador(sessionPerfil) && (
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className="size-11 rounded-md border border-[var(--chat-border-strong)] text-muted-foreground hover:bg-[var(--chat-hover)] hover:text-foreground md:size-10"
-            aria-label="Inbox settings"
-            title="Inbox settings"
-          >
-            <Link href="/settings">
-              <Settings className="size-5" />
-            </Link>
-          </Button>
+          <div className="relative" ref={adminMenuRef}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsAdminMenuOpen((open) => !open)}
+              aria-haspopup="menu"
+              aria-expanded={isAdminMenuOpen}
+              aria-label="Administración"
+              title="Administración"
+              className={cn(
+                'size-11 rounded-md border border-[var(--chat-border-strong)] text-muted-foreground hover:bg-[var(--chat-hover)] hover:text-foreground md:size-10',
+                isAdminMenuOpen && 'bg-[var(--chat-hover)] text-foreground',
+              )}
+            >
+              <ShieldCheck className="size-5" />
+            </Button>
+
+            {isAdminMenuOpen && (
+              <div
+                role="menu"
+                aria-label="Administración"
+                className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-52 rounded-xl border border-[var(--chat-border-strong)] bg-popover p-1 text-sm text-popover-foreground shadow-lg"
+              >
+                {[
+                  { href: '/settings', label: 'Ajustes', icon: Settings },
+                  { href: '/usuarios', label: 'Usuarios', icon: Users },
+                  { href: '/auditoria', label: 'Auditoría', icon: ScrollText },
+                  { href: '/metricas', label: 'Métricas', icon: BarChart3 },
+                ].map(({ href, label, icon: Icon }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    role="menuitem"
+                    onClick={() => setIsAdminMenuOpen(false)}
+                    className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-xs font-medium text-foreground hover:bg-[var(--chat-hover)]"
+                  >
+                    <Icon className="size-3.5" />
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         )}
         <Button
           asChild
@@ -2195,54 +2255,6 @@ export function ConversationList({
           >
             <Link href="/respuestas-rapidas">
               <Zap className="size-5" />
-            </Link>
-          </Button>
-        )}
-        {esAdministrador(sessionPerfil) && (
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className="size-11 rounded-md border border-[var(--chat-border-strong)] text-muted-foreground hover:bg-[var(--chat-hover)] hover:text-foreground md:size-10"
-            aria-label="Usuarios"
-            title="Usuarios"
-          >
-            <Link href="/usuarios">
-              <Users className="size-5" />
-            </Link>
-          </Button>
-        )}
-        {/* Funcionalidad "Historial de auditoría": acceso exclusivo de
-            Administrador (mismo helper que Ajustes y Usuarios) — la pantalla
-            también está protegida server-side (ver src/app/auditoria/page.tsx). */}
-        {esAdministrador(sessionPerfil) && (
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className="size-11 rounded-md border border-[var(--chat-border-strong)] text-muted-foreground hover:bg-[var(--chat-hover)] hover:text-foreground md:size-10"
-            aria-label="Historial de auditoría"
-            title="Historial de auditoría"
-          >
-            <Link href="/auditoria">
-              <ScrollText className="size-5" />
-            </Link>
-          </Button>
-        )}
-        {/* Funcionalidad "Dashboard de métricas": exclusivo de Administrador,
-            mismo patrón que auditoría — protegido también server-side (ver
-            src/app/metricas/page.tsx). */}
-        {esAdministrador(sessionPerfil) && (
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className="size-11 rounded-md border border-[var(--chat-border-strong)] text-muted-foreground hover:bg-[var(--chat-hover)] hover:text-foreground md:size-10"
-            aria-label="Dashboard de métricas"
-            title="Dashboard de métricas"
-          >
-            <Link href="/metricas">
-              <BarChart3 className="size-5" />
             </Link>
           </Button>
         )}
