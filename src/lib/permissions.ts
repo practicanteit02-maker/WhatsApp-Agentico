@@ -71,6 +71,25 @@ export function esRolValido(perfil: string): boolean {
   return normalizarRol(perfil) !== undefined;
 }
 
+/**
+ * Todas las ortografías aceptadas que resuelven al mismo rol canónico que
+ * `perfil` — la forma canónica de ROLES más cualquier alias de ALIAS_ROLES
+ * que apunte a ella. Pensada para filtrar contra un valor de rol guardado
+ * históricamente (ej. el snapshot `actorPerfil` de la auditoría), donde la
+ * fila pudo quedar escrita como "Coordinador" o "Coordinadora" según quién
+ * la generó: filtrar por "Coordinadora" con igualdad estricta se perdería
+ * las filas guardadas como "Coordinador". Devuelve [] si `perfil` no es un
+ * rol reconocido.
+ */
+export function variantesDeRol(perfil: string): string[] {
+  const canonico = normalizarRol(perfil);
+  if (!canonico) return [];
+  const aliases = Object.entries(ALIAS_ROLES)
+    .filter(([, destino]) => destino === canonico)
+    .map(([alias]) => alias);
+  return [canonico, ...aliases];
+}
+
 /** ¿Este rol puede hacer esta acción? Un perfil que no sea uno de ROLES ni
  * uno de sus alias (sin asignar, o un perfil viejo que ya no existe) no
  * tiene ningún permiso — el valor por defecto es siempre el más

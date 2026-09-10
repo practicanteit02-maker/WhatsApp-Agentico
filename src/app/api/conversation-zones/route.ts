@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getAllZones, setZone } from '@/lib/conversation-zones';
+import { registrarAuditoria } from '@/lib/auditoria';
+import { getAllZones, getZone, setZone } from '@/lib/conversation-zones';
 import { isAssignableZone } from '@/lib/mock-zones';
 import { requierePermiso } from '@/lib/require-permission';
 
@@ -33,6 +34,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Zona inválida: ${body.zona}` }, { status: 400 });
   }
 
+  const zonaAnterior = await getZone(body.threadKey);
   await setZone(body.threadKey, body.zona);
+
+  await registrarAuditoria({
+    accion: 'cambio_zona',
+    objetoTipo: 'chat',
+    objetoId: body.threadKey,
+    valorAnterior: zonaAnterior ?? null,
+    valorNuevo: body.zona,
+  });
+
   return NextResponse.json({ ok: true });
 }

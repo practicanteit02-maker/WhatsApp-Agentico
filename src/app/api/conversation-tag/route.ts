@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
+import { registrarAuditoria } from '@/lib/auditoria';
 import { checkZoneAccess } from '@/lib/conversation-zones';
-import { deleteConversationTag, getAllConversationTags, setConversationTag } from '@/lib/tags';
+import { deleteConversationTag, getAllConversationTags, getConversationTag, setConversationTag } from '@/lib/tags';
 import { requierePermiso } from '@/lib/require-permission';
 
 const MAX_TAG_LENGTH = 40;
@@ -48,7 +49,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
+  const etiquetaAnterior = await getConversationTag(body.threadKey);
   await setConversationTag(body.threadKey, etiqueta);
+
+  await registrarAuditoria({
+    accion: etiquetaAnterior ? 'editar_etiqueta' : 'asignar_etiqueta',
+    objetoTipo: 'chat',
+    objetoId: body.threadKey,
+    valorAnterior: etiquetaAnterior ?? null,
+    valorNuevo: etiqueta,
+  });
+
   return NextResponse.json({ ok: true });
 }
 
@@ -67,6 +78,16 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
+  const etiquetaAnterior = await getConversationTag(threadKey);
   await deleteConversationTag(threadKey);
+
+  await registrarAuditoria({
+    accion: 'quitar_etiqueta',
+    objetoTipo: 'chat',
+    objetoId: threadKey,
+    valorAnterior: etiquetaAnterior ?? null,
+    valorNuevo: null,
+  });
+
   return NextResponse.json({ ok: true });
 }

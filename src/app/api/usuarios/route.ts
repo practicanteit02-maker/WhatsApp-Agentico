@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
+import { registrarAuditoria } from '@/lib/auditoria';
 import { deleteUser, getAllUsers, getUser, setUser } from '@/lib/panel-users';
 import { esAdministrador, esRolValido } from '@/lib/permissions';
 import { isAssignableZone } from '@/lib/mock-zones';
@@ -76,6 +77,14 @@ export async function POST(request: Request) {
   }
 
   await setUser(validated.correo, validated.perfil, validated.zona);
+
+  await registrarAuditoria({
+    accion: 'crear_usuario',
+    objetoTipo: 'usuario',
+    objetoId: validated.correo,
+    valorNuevo: `perfil: ${validated.perfil}; zona: ${validated.zona || '—'}`,
+  });
+
   return NextResponse.json({ ok: true, user: validated });
 }
 
@@ -95,6 +104,23 @@ export async function PUT(request: Request) {
   }
 
   await setUser(validated.correo, validated.perfil, validated.zona);
+
+  const cambios: string[] = [];
+  if ((existing.perfil || '') !== validated.perfil) {
+    cambios.push(`perfil: ${existing.perfil || '—'} → ${validated.perfil}`);
+  }
+  if ((existing.zona || '') !== (validated.zona || '')) {
+    cambios.push(`zona: ${existing.zona || '—'} → ${validated.zona || '—'}`);
+  }
+  await registrarAuditoria({
+    accion: 'editar_usuario',
+    objetoTipo: 'usuario',
+    objetoId: validated.correo,
+    valorAnterior: `perfil: ${existing.perfil || '—'}; zona: ${existing.zona || '—'}`,
+    valorNuevo: `perfil: ${validated.perfil}; zona: ${validated.zona || '—'}`,
+    detalle: cambios.length > 0 ? cambios.join('; ') : 'sin cambios',
+  });
+
   return NextResponse.json({ ok: true, user: validated });
 }
 
@@ -114,5 +140,14 @@ export async function DELETE(request: Request) {
   }
 
   await deleteUser(correo);
+
+  await registrarAuditoria({
+    accion: 'eliminar_usuario',
+    objetoTipo: 'usuario',
+    objetoId: correo,
+    valorAnterior: `perfil: ${existing.perfil || '—'}; zona: ${existing.zona || '—'}`,
+    valorNuevo: null,
+  });
+
   return NextResponse.json({ ok: true });
 }

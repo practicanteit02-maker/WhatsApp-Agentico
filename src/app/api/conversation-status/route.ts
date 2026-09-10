@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getAllStatuses, isValidStatus, setStatus } from '@/lib/chat-status';
+import { registrarAuditoria } from '@/lib/auditoria';
+import { getAllStatuses, getStatus, isValidStatus, setStatus } from '@/lib/chat-status';
 import { checkZoneAccess, getZone } from '@/lib/conversation-zones';
 import { emitChatCollabUpdate } from '@/lib/event-bus';
 import { requierePermiso } from '@/lib/require-permission';
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
+  const estadoAnterior = await getStatus(body.threadKey);
   await setStatus(body.threadKey, body.estado);
 
   // Funcionalidad "Estado del chat en vivo": avisa por el mismo canal SSE
@@ -52,6 +54,14 @@ export async function POST(request: Request) {
   // filtrado por zona igual que el resto.
   const zona = await getZone(body.threadKey);
   emitChatCollabUpdate({ threadKey: body.threadKey, estado: body.estado, zona });
+
+  await registrarAuditoria({
+    accion: 'cambio_estado',
+    objetoTipo: 'chat',
+    objetoId: body.threadKey,
+    valorAnterior: estadoAnterior,
+    valorNuevo: body.estado,
+  });
 
   return NextResponse.json({ ok: true });
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { registrarAuditoria } from '@/lib/auditoria';
 import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inbox-settings';
 import { whatsappClient } from '@/lib/whatsapp-client';
 import { requierePermiso } from '@/lib/require-permission';
@@ -198,6 +199,13 @@ export async function POST(request: Request) {
       category: category as TemplateCategoryInput,
       language: language!.trim(),
       components,
+    });
+
+    await registrarAuditoria({
+      accion: 'crear_plantilla',
+      objetoTipo: 'plantilla',
+      objetoId: normalizedName,
+      valorNuevo: `${category} · ${language!.trim()}`,
     });
 
     return NextResponse.json(result);
