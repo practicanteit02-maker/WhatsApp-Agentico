@@ -7,11 +7,15 @@ import "./globals.css";
 export const dynamic = "force-dynamic";
 
 const interDisplay = localFont({
+  // woff2 en vez de los .ttf originales (~410 KB cada uno, ~1.6 MB en total):
+  // mismo recorte "Display" de Inter, mismo render, pero ~66% más liviano
+  // (~552 KB los cuatro). next/font/local no transcodifica, así que la
+  // conversión se hizo una vez con wawoff2 y se commitearon los .woff2.
   src: [
-    { path: "./fonts/InterDisplay-Regular.ttf", weight: "400", style: "normal" },
-    { path: "./fonts/InterDisplay-Medium.ttf", weight: "500", style: "normal" },
-    { path: "./fonts/InterDisplay-SemiBold.ttf", weight: "600", style: "normal" },
-    { path: "./fonts/InterDisplay-Bold.ttf", weight: "700", style: "normal" },
+    { path: "./fonts/InterDisplay-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/InterDisplay-Medium.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/InterDisplay-SemiBold.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/InterDisplay-Bold.woff2", weight: "700", style: "normal" },
   ],
   variable: "--font-inter-display",
   display: "swap",
