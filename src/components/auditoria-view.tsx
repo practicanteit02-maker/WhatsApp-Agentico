@@ -6,6 +6,11 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import {
+  fetchConversations,
+  groupConversationsByPhoneNumber,
+  shortConversationId,
+} from '@/lib/inbox-data';
 import type { RegistroAuditoria } from '@/lib/auditoria';
 import type { PanelUser } from '@/lib/panel-users';
 
@@ -70,6 +75,49 @@ const SELECT_CLASS =
   'h-10 w-full rounded-md border border-[var(--chat-border-strong)] bg-[var(--chat-input)] px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
 
 /**
+ * Versión legible de un `objetoId` de tipo "chat" (un threadKey
+ * `phoneNumberId:contactKey`, ver threadKeyFor en src/lib/inbox-data.ts)
+ * cuando NO se pudo resolver el nombre del contacto — porque el chat está
+ * archivado, terminado, o quedó fuera de las ~100 conversaciones más
+ * recientes que devuelve /api/conversations. Se descarta el phoneNumberId
+ * (la parte de la izquierda, sin valor para quien lee) y se muestra:
+ *   - `+<dígitos>`            si el contactKey es un teléfono
+ *   - `Contacto sin número`   si es `bsuid:<id>` (username de WhatsApp)
+ *   - `Chat <id corto>`       si es `conversation:<id>` (sin teléfono ni bsuid)
+ *   - el contactKey crudo     para cualquier otra forma inesperada
+ */
+function threadKeyLegible(threadKey: string): string {
+  const separador = threadKey.indexOf(':');
+  const contactKey = separador === -1 ? threadKey : threadKey.slice(separador + 1);
+
+  if (/^\d+$/.test(contactKey)) return `+${contactKey}`;
+  if (contactKey.startsWith('bsuid:')) return 'Contacto sin número';
+  if (contactKey.startsWith('conversation:')) {
+    return `Chat ${shortConversationId(contactKey.slice('conversation:'.length)) || 'sin id'}`;
+  }
+  return contactKey;
+}
+
+/**
+ * Texto a mostrar en la columna "Objeto" de un registro. Para plantillas y
+ * usuarios el `objetoId` ya es legible (nombre de la plantilla o correo). Para
+ * chats se intenta el nombre del contacto (mapa threadKey→nombre armado desde
+ * /api/conversations); si no está, se cae a `threadKeyLegible`. `resuelto`
+ * indica si se logró un nombre real (para atenuar el fallback en la UI).
+ */
+function etiquetaObjeto(
+  registro: RegistroAuditoria,
+  nombrePorThreadKey: Map<string, string>,
+): { texto: string; resuelto: boolean } {
+  if (registro.objetoTipo !== 'chat') {
+    return { texto: registro.objetoId, resuelto: true };
+  }
+  const nombre = nombrePorThreadKey.get(registro.objetoId);
+  if (nombre) return { texto: nombre, resuelto: true };
+  return { texto: threadKeyLegible(registro.objetoId), resuelto: false };
+}
+
+/**
  * Funcionalidad "Historial de auditoría": tabla filtrable de quién cambió
  * qué y cuándo. Solo Administrador llega hasta acá (ver
  * src/app/auditoria/page.tsx). Mismo estilo de fetch/estados de carga que
@@ -92,6 +140,7 @@ export function AuditoriaView() {
   const [error, setError] = useState<string | null>(null);
 
   const [usuarios, setUsuarios] = useState<PanelUser[]>([]);
+  const [nombrePorThreadKey, setNombrePorThreadKey] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     let cancelado = false;
@@ -102,6 +151,30 @@ export function AuditoriaView() {
       })
       .catch(() => {
         /* la lista de personas es una comodidad del filtro, no bloquea la pantalla */
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  // Nombres de contacto para la columna "Objeto": se piden una vez al abrir
+  // la pantalla (no en cada "Cargar más") y se cruzan por threadKey contra
+  // cada registro de tipo "chat". Si falla, o si el chat no está entre las
+  // conversaciones recientes, cada registro cae a threadKeyLegible() — es
+  // mejora progresiva, nunca bloquea la tabla ni marca error.
+  useEffect(() => {
+    let cancelado = false;
+    fetchConversations()
+      .then((conversaciones) => {
+        if (cancelado) return;
+        const mapa = new Map<string, string>();
+        for (const thread of groupConversationsByPhoneNumber(conversaciones)) {
+          if (thread.contactName) mapa.set(thread.key, thread.contactName);
+        }
+        setNombrePorThreadKey(mapa);
+      })
+      .catch(() => {
+        /* sin nombres se muestra el fallback legible del threadKey */
       });
     return () => {
       cancelado = true;
@@ -315,7 +388,9 @@ export function AuditoriaView() {
                 </tr>
               </thead>
               <tbody>
-                {registros.map((r) => (
+                {registros.map((r) => {
+                  const objeto = etiquetaObjeto(r, nombrePorThreadKey);
+                  return (
                   <tr
                     key={r.ts}
                     className="border-b border-[var(--chat-border-strong)] align-top last:border-b-0"
@@ -344,10 +419,13 @@ export function AuditoriaView() {
                         {OBJETO_LABEL[r.objetoTipo] ?? r.objetoTipo}
                       </span>
                       <span
-                        className="block max-w-[18rem] truncate font-mono text-xs"
+                        className={cn(
+                          'block max-w-[18rem] truncate text-xs',
+                          objeto.resuelto ? 'font-medium' : 'text-muted-foreground',
+                        )}
                         title={r.objetoId}
                       >
-                        {r.objetoId}
+                        {objeto.texto}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-xs">
@@ -368,7 +446,8 @@ export function AuditoriaView() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
