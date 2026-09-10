@@ -45,15 +45,27 @@ export async function GET(request: Request) {
 
   const cursor = searchParams.get('cursor')?.trim() || undefined;
 
-  const resultado = await listarAuditoria({
-    desde,
-    hasta,
-    actor,
-    perfil,
-    acciones: acciones.length > 0 ? acciones : undefined,
-    limit,
-    cursor,
-  });
+  try {
+    const resultado = await listarAuditoria({
+      desde,
+      hasta,
+      actor,
+      perfil,
+      acciones: acciones.length > 0 ? acciones : undefined,
+      limit,
+      cursor,
+    });
 
-  return NextResponse.json({ ...resultado, desde, hasta });
+    return NextResponse.json({ ...resultado, desde, hasta });
+  } catch (error) {
+    // Cualquier fallo de la consulta (permisos IAM, tabla inexistente,
+    // expresión inválida) se devuelve como JSON con status 500 — nunca un
+    // 500 con cuerpo vacío, que del lado del cliente aparece como el
+    // confuso "Unexpected end of JSON input".
+    console.error('GET /api/auditoria falló:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'No se pudo cargar el historial de auditoría' },
+      { status: 500 }
+    );
+  }
 }

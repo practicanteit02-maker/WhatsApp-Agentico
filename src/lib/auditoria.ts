@@ -202,36 +202,47 @@ function mapearItem(item: Record<string, unknown>): RegistroAuditoria {
  * rango es una Query a su propia partición; el filtro por persona/rol/acción
  * se aplica como FilterExpression. Trae `limit + 1` para saber si hay más y,
  * si los hay, devuelve como cursor la clave del último registro incluido.
+ *
+ * DynamoDB rechaza con ValidationException cualquier clave de
+ * ExpressionAttributeNames que no se use en alguna expresión, así que los
+ * nombres se arman por Query: `#dia` siempre; los del filtro solo si ese
+ * filtro está activo; y `#ts` solo en el día del cursor (que es el único que
+ * lo referencia en la KeyConditionExpression). Toda la lectura va dentro de
+ * un try/catch: cualquier error (permisos, tabla inexistente, expresión
+ * inválida) se propaga como una excepción con contexto en vez de dejar que
+ * el handler devuelva un 500 con cuerpo vacío.
  */
 export async function listarAuditoria(filtros: FiltrosAuditoria): Promise<ResultadoAuditoria> {
   const { desde, hasta, actor, perfil, acciones, limit } = filtros;
   const cursor = decodificarCursor(filtros.cursor);
 
-  const nombres: Record<string, string> = { '#dia': 'dia', '#ts': 'ts' };
+  // Nombres/valores del FILTRO: constantes para todas las Query del rango, y
+  // solo se incluyen si su filtro está activo (si no, quedarían sin usar).
+  const nombresFiltro: Record<string, string> = {};
+  const valoresFiltro: Record<string, unknown> = {};
   const filtroPartes: string[] = [];
-  const valoresBase: Record<string, unknown> = {};
 
   if (actor) {
-    nombres['#actor'] = 'actor';
+    nombresFiltro['#actor'] = 'actor';
     filtroPartes.push('#actor = :actor');
-    valoresBase[':actor'] = actor;
+    valoresFiltro[':actor'] = actor;
   }
   if (perfil) {
     const variantes = variantesDeRol(perfil);
     if (variantes.length > 0) {
-      nombres['#actorPerfil'] = 'actorPerfil';
+      nombresFiltro['#actorPerfil'] = 'actorPerfil';
       const marcadores = variantes.map((_, i) => `:perfil${i}`);
       variantes.forEach((valor, i) => {
-        valoresBase[`:perfil${i}`] = valor;
+        valoresFiltro[`:perfil${i}`] = valor;
       });
       filtroPartes.push(`#actorPerfil IN (${marcadores.join(', ')})`);
     }
   }
   if (acciones && acciones.length > 0) {
-    nombres['#accion'] = 'accion';
+    nombresFiltro['#accion'] = 'accion';
     const marcadores = acciones.map((_, i) => `:accion${i}`);
     acciones.forEach((valor, i) => {
-      valoresBase[`:accion${i}`] = valor;
+      valoresFiltro[`:accion${i}`] = valor;
     });
     filtroPartes.push(`#accion IN (${marcadores.join(', ')})`);
   }
@@ -241,40 +252,50 @@ export async function listarAuditoria(filtros: FiltrosAuditoria): Promise<Result
   const registros: RegistroAuditoria[] = [];
   let alcanzoCursor = !cursor;
 
-  for (const dia of diasDescendentes(desde, hasta)) {
-    if (cursor && !alcanzoCursor) {
-      if (dia > cursor.dia) continue;
-      alcanzoCursor = true;
-    }
-
-    const usarTope = cursor && dia === cursor.dia;
-    const valores: Record<string, unknown> = { ...valoresBase, ':dia': dia };
-    let keyCondition = '#dia = :dia';
-    if (usarTope) {
-      keyCondition += ' AND #ts < :tope';
-      valores[':tope'] = cursor!.ts;
-    }
-
-    let exclusiveStartKey: Record<string, unknown> | undefined;
-    do {
-      const salida = await dynamoClient.send(
-        new QueryCommand({
-          TableName: AUDIT_TABLE,
-          KeyConditionExpression: keyCondition,
-          FilterExpression: filterExpression,
-          ExpressionAttributeNames: nombres,
-          ExpressionAttributeValues: valores,
-          ExclusiveStartKey: exclusiveStartKey,
-          ScanIndexForward: false,
-        })
-      );
-      for (const item of salida.Items ?? []) {
-        registros.push(mapearItem(item as Record<string, unknown>));
+  try {
+    for (const dia of diasDescendentes(desde, hasta)) {
+      if (cursor && !alcanzoCursor) {
+        if (dia > cursor.dia) continue;
+        alcanzoCursor = true;
       }
-      exclusiveStartKey = salida.LastEvaluatedKey as Record<string, unknown> | undefined;
-    } while (exclusiveStartKey && registros.length <= limit);
 
-    if (registros.length > limit) break;
+      const usarTope = Boolean(cursor && dia === cursor.dia);
+
+      // Nombres/valores/condición de ESTA Query: `#dia` siempre; `#ts` solo
+      // en el día del cursor, que es donde se usa en la key condition.
+      const nombres: Record<string, string> = { '#dia': 'dia', ...nombresFiltro };
+      const valores: Record<string, unknown> = { ...valoresFiltro, ':dia': dia };
+      let keyCondition = '#dia = :dia';
+      if (usarTope) {
+        nombres['#ts'] = 'ts';
+        keyCondition += ' AND #ts < :tope';
+        valores[':tope'] = cursor!.ts;
+      }
+
+      let exclusiveStartKey: Record<string, unknown> | undefined;
+      do {
+        const salida = await dynamoClient.send(
+          new QueryCommand({
+            TableName: AUDIT_TABLE,
+            KeyConditionExpression: keyCondition,
+            FilterExpression: filterExpression,
+            ExpressionAttributeNames: nombres,
+            ExpressionAttributeValues: valores,
+            ExclusiveStartKey: exclusiveStartKey,
+            ScanIndexForward: false,
+          })
+        );
+        for (const item of salida.Items ?? []) {
+          registros.push(mapearItem(item as Record<string, unknown>));
+        }
+        exclusiveStartKey = salida.LastEvaluatedKey as Record<string, unknown> | undefined;
+      } while (exclusiveStartKey && registros.length <= limit);
+
+      if (registros.length > limit) break;
+    }
+  } catch (error) {
+    console.error('No se pudo consultar "auditoria-panel" en DynamoDB:', error);
+    throw new Error('No se pudo consultar el historial de auditoría en DynamoDB');
   }
 
   if (registros.length > limit) {
