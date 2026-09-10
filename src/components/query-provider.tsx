@@ -8,6 +8,11 @@ type Props = {
 };
 
 export function QueryProvider({ children }: Props) {
+  // `refetchOnWindowFocus: true` se deja como default global a propósito: al
+  // volver a la pestaña querés ver los chats y el chat abierto al día. Las
+  // queries de metadata que casi no cambian (zona/estado/etiqueta de cada
+  // chat) lo apagan una por una con `refetchOnWindowFocus: false` + un
+  // `staleTime` de 3 min, para que el alt-tab no dispare un refetch de todo.
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {

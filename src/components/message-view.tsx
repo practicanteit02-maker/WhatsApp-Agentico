@@ -921,7 +921,10 @@ export function MessageView({
         ? OUTBOUND_STATUS_FAST_POLL_INTERVAL_MS
         : OUTBOUND_STATUS_NORMAL_POLL_INTERVAL_MS;
     },
-    refetchIntervalInBackground: true,
+    // Sin `refetchIntervalInBackground`: con la pestaña en segundo plano no
+    // hay nadie mirando este chat, así que no tiene sentido sondear sus
+    // mensajes cada 8 s. Al volver el foco, `refetchOnWindowFocus` (global)
+    // lo pone al día.
     refetchOnMount: false,
   });
 

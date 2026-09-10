@@ -389,9 +389,10 @@ export function ConversationList({
     // un respaldo para cuando esa conexión se cae. Se mantiene lento a
     // propósito para que el sondeo rutinario no compita con acciones reales
     // (como enviar un mensaje) por el presupuesto limitado de conexiones por
-    // origen del navegador.
+    // origen del navegador. Sin `refetchIntervalInBackground`: con la pestaña
+    // en segundo plano no tiene sentido seguir golpeando Kapso cada 10 s —
+    // al volver el foco, `refetchOnWindowFocus` (global) trae lo que falte.
     refetchInterval: 10_000,
-    refetchIntervalInBackground: true,
   });
 
   // Zona real de cada chat (ver src/lib/conversation-zones.ts) — reemplaza
@@ -399,10 +400,19 @@ export function ConversationList({
   // todo, cualquier otro perfil solo su zona) ya pasó server-side en
   // /api/conversations; este mapa es solo para mostrar la píldora de cada
   // chat visible y, si sos Administrador, poder asignarla.
+  // La zona de un chat casi nunca cambia, y cuando alguien la cambia desde
+  // el panel la mutación ya hace `invalidateQueries` al instante. Así que en
+  // vez de sondear cada 30 s "por si otro coordinador la cambió", se sondea
+  // cada 3 min y se considera fresca ese mismo tiempo — sin refetch en cada
+  // alt-tab (`refetchOnWindowFocus: false`), que era el "tirón" de ~7
+  // requests simultáneas al volver a la pestaña. Mismo criterio para
+  // estado y etiqueta más abajo.
   const { data: zoneMap = {} } = useQuery({
     queryKey: CONVERSATION_ZONES_QUERY_KEY,
     queryFn: fetchConversationZones,
-    refetchInterval: 30_000,
+    refetchInterval: 180_000,
+    staleTime: 180_000,
+    refetchOnWindowFocus: false,
   });
 
   // Funcionalidad "RBAC": reasignar zona sigue siendo la acción "editar" de
@@ -464,10 +474,16 @@ export function ConversationList({
   // Administrador, sin cambios).
   const canCambiarEstado = puedeSePuede(sessionPerfil, 'escribir');
 
+  // Mismo criterio que la zona (ver arriba): cambia poco, la mutación
+  // invalida al instante y además hay un evento SSE `collab` que actualiza
+  // el estado en vivo cuando otra pestaña lo cambia — así que el sondeo solo
+  // es un respaldo lejano. Cada 3 min, fresca 3 min, sin refetch al enfocar.
   const { data: statusMap = {} } = useQuery({
     queryKey: CONVERSATION_STATUS_QUERY_KEY,
     queryFn: fetchConversationStatuses,
-    refetchInterval: 30_000,
+    refetchInterval: 180_000,
+    staleTime: 180_000,
+    refetchOnWindowFocus: false,
   });
 
   const [statusEditorThreadKey, setStatusEditorThreadKey] = useState<string | null>(null);
@@ -520,10 +536,15 @@ export function ConversationList({
   // aplica a zona/estado).
   const canEtiquetar = puedeSePuede(sessionPerfil, 'escribir');
 
+  // Mismo criterio que zona y estado (ver arriba): texto libre que cambia
+  // poco, la mutación invalida al instante. Cada 3 min, fresca 3 min, sin
+  // refetch al enfocar.
   const { data: tagMap = {} } = useQuery({
     queryKey: CONVERSATION_TAG_QUERY_KEY,
     queryFn: fetchConversationTags,
-    refetchInterval: 30_000,
+    refetchInterval: 180_000,
+    staleTime: 180_000,
+    refetchOnWindowFocus: false,
   });
 
   const [tagEditorThreadKey, setTagEditorThreadKey] = useState<string | null>(null);
