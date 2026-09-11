@@ -4,17 +4,31 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { MatrizActividad } from '@/components/matriz-actividad';
 import { getProfileStyle } from '@/lib/mock-profiles';
 import type { AgregadoAuditoria } from '@/lib/auditoria';
 import type { MetricasChats } from '@/lib/metrics';
+import type { AgregadoRespuestas } from '@/lib/respuestas-metrics';
 
 type RespuestaMetricas = {
   chats: MetricasChats | null;
   auditoria: AgregadoAuditoria | null;
+  respuestas: AgregadoRespuestas | null;
   desde: string;
   hasta: string;
   errores: string[];
 };
+
+/** "45s" / "3 min" / "2h 15m" — formato compacto para segundos de tiempo de
+ * respuesta, igual de legible en una barra angosta que en el KPI grande. */
+function formatearDuracion(segundos: number): string {
+  if (segundos < 60) return `${Math.round(segundos)}s`;
+  const minutos = Math.round(segundos / 60);
+  if (minutos < 60) return `${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  const minutosRestantes = minutos % 60;
+  return minutosRestantes > 0 ? `${horas}h ${minutosRestantes}m` : `${horas}h`;
+}
 
 const RANGOS = [7, 14, 30] as const;
 type Rango = (typeof RANGOS)[number];
@@ -48,12 +62,17 @@ function BarraHorizontal({
   max,
   clase,
   extra,
+  valorTexto,
 }: {
   etiqueta: React.ReactNode;
   valor: number;
   max: number;
   clase?: string;
   extra?: React.ReactNode;
+  /** Texto a mostrar en vez del número crudo de `valor` (ej. "3 min" en vez
+   * de "180") — `valor`/`max` siguen siendo los que deciden el ancho de la
+   * barra, esto solo cambia lo que se lee. */
+  valorTexto?: string;
 }) {
   const ancho = max > 0 ? Math.max((valor / max) * 100, valor > 0 ? 3 : 0) : 0;
   return (
@@ -64,7 +83,7 @@ function BarraHorizontal({
       <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-[var(--chat-hover)]">
         <div className={cn('h-full rounded-full', clase ?? 'bg-primary')} style={{ width: `${ancho}%` }} />
       </div>
-      <span className="w-10 flex-shrink-0 text-right font-medium tabular-nums">{valor}</span>
+      <span className="w-14 flex-shrink-0 text-right font-medium tabular-nums">{valorTexto ?? valor}</span>
       {extra}
     </div>
   );
@@ -97,7 +116,9 @@ function Kpi({ etiqueta, valor, detalle }: { etiqueta: string; valor: string | n
  * (ver src/app/metricas/page.tsx). Todos los números vienen ya calculados de
  * /api/metrics; acá solo se dibujan, a mano con Tailwind (sin librería de
  * gráficos). Chats por estado/zona son una foto del momento; acciones por
- * persona / por día usan el rango de fecha (7/14/30 días).
+ * persona/día y tiempo de respuesta/actividad por hora-día (de
+ * "respuestas-panel", ver src/lib/respuestas-metrics.ts) usan el rango de
+ * fecha (7/14/30 días).
  */
 export function MetricsDashboard() {
   const [rango, setRango] = useState<Rango>(7);
@@ -127,6 +148,7 @@ export function MetricsDashboard() {
 
   const chats = data?.chats ?? null;
   const auditoria = data?.auditoria ?? null;
+  const respuestas = data?.respuestas ?? null;
 
   const maxEstado = chats ? Math.max(1, ...Object.values(chats.porEstado)) : 1;
   const maxZona = chats ? Math.max(1, ...Object.values(chats.porZona)) : 1;
@@ -134,6 +156,15 @@ export function MetricsDashboard() {
   const maxDia = auditoria ? Math.max(1, ...auditoria.porDia.map((d) => d.total)) : 1;
 
   const coordinadorTop = auditoria?.porActor[0];
+
+  // Solo entra acá quien tiene al menos un mensaje con el snapshot de
+  // tiempo de respuesta (ver el campo opcional en src/lib/respuestas.ts) —
+  // mostrar "0" para alguien sin datos se confundiría con "responde
+  // instantáneo", así que directamente no aparece en esta sección.
+  const actoresConTiempo = (respuestas?.porActor ?? [])
+    .filter((a) => a.tiempoRespuestaPromedioSeg !== null)
+    .sort((a, b) => (a.tiempoRespuestaPromedioSeg ?? 0) - (b.tiempoRespuestaPromedioSeg ?? 0));
+  const maxTiempoRespuesta = Math.max(1, ...actoresConTiempo.map((a) => a.tiempoRespuestaPromedioSeg ?? 0));
 
   return (
     <div className="space-y-4">
@@ -188,7 +219,7 @@ export function MetricsDashboard() {
       ) : (
         <>
           {/* KPIs */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Kpi etiqueta="Chats totales" valor={chats?.total ?? '—'} />
             <Kpi etiqueta={`Acciones (${rango} días)`} valor={auditoria?.totalAcciones ?? '—'} />
             <Kpi
@@ -197,6 +228,15 @@ export function MetricsDashboard() {
               detalle={coordinadorTop?.actor}
             />
             <Kpi etiqueta="Chats sin número" valor={chats?.porZona['Sin asignar'] ?? '—'} />
+            <Kpi
+              etiqueta="Tiempo de respuesta"
+              valor={
+                respuestas?.tiempoRespuestaPromedioSeg != null
+                  ? formatearDuracion(respuestas.tiempoRespuestaPromedioSeg)
+                  : '—'
+              }
+              detalle={`Promedio del equipo (${rango} días)`}
+            />
           </div>
 
           {/* Chats por estado */}
@@ -290,6 +330,43 @@ export function MetricsDashboard() {
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Sin actividad en el rango.</p>
+            )}
+          </Seccion>
+
+          {/* Tiempo de respuesta por persona */}
+          <Seccion titulo={`Tiempo de respuesta por persona (${rango} días)`}>
+            {actoresConTiempo.length > 0 ? (
+              <div className="space-y-2">
+                {actoresConTiempo.map((a) => (
+                  <BarraHorizontal
+                    key={a.actor}
+                    etiqueta={
+                      <span className="flex items-center gap-1.5 truncate">
+                        <span
+                          className="size-2 flex-shrink-0 rounded-full"
+                          style={{ backgroundColor: getProfileStyle(a.perfil).color }}
+                          title={a.perfil}
+                        />
+                        <span className="truncate">{a.actor}</span>
+                      </span>
+                    }
+                    valor={a.tiempoRespuestaPromedioSeg ?? 0}
+                    valorTexto={formatearDuracion(a.tiempoRespuestaPromedioSeg ?? 0)}
+                    max={maxTiempoRespuesta}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Sin datos de tiempo de respuesta en el rango.</p>
+            )}
+          </Seccion>
+
+          {/* Actividad por hora y día */}
+          <Seccion titulo={`Actividad por hora y día (${rango} días)`}>
+            {respuestas && respuestas.totalMensajes > 0 ? (
+              <MatrizActividad celdas={respuestas.matrizActividad} />
+            ) : (
+              <p className="text-sm text-muted-foreground">Sin mensajes registrados en el rango.</p>
             )}
           </Seccion>
         </>

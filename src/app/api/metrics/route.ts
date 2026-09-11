@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { agregarAuditoria, diaBogota, restarDias } from '@/lib/auditoria';
 import { contarChatsVivos } from '@/lib/metrics';
+import { agregarRespuestas } from '@/lib/respuestas-metrics';
 import { esAdministrador } from '@/lib/permissions';
 
 /**
@@ -17,10 +18,10 @@ import { esAdministrador } from '@/lib/permissions';
  *   - dias          : atajo alternativo — "últimos N días" (7/14/30). Se
  *                     ignora si vienen `desde`/`hasta` explícitos.
  *
- * Las dos agregaciones (chats desde Kapso, auditoría desde DynamoDB) corren
- * con Promise.allSettled: si Kapso falla o tarda, `chats` viene null y el
- * motivo queda en `errores`, pero las métricas de auditoría igual se
- * devuelven.
+ * Las tres agregaciones (chats desde Kapso, auditoría y respuestas desde
+ * DynamoDB) corren con Promise.allSettled: si una falla (ej. Kapso tarda),
+ * esa clave viene null y el motivo queda en `errores`, pero las demás
+ * igual se devuelven.
  */
 export async function GET(request: Request) {
   const session = await auth();
@@ -44,9 +45,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'El rango de fechas es inválido' }, { status: 400 });
   }
 
-  const [chatsRes, auditoriaRes] = await Promise.allSettled([
+  const [chatsRes, auditoriaRes, respuestasRes] = await Promise.allSettled([
     contarChatsVivos(),
     agregarAuditoria(desde, hasta),
+    agregarRespuestas(desde, hasta),
   ]);
 
   const errores: string[] = [];
@@ -67,5 +69,13 @@ export async function GET(request: Request) {
     errores.push('No se pudieron calcular las métricas de auditoría.');
   }
 
-  return NextResponse.json({ chats, auditoria, desde, hasta, errores });
+  let respuestas = null;
+  if (respuestasRes.status === 'fulfilled') {
+    respuestas = respuestasRes.value;
+  } else {
+    console.error('GET /api/metrics — agregación de respuestas falló:', respuestasRes.reason);
+    errores.push('No se pudieron calcular las métricas de tiempo de respuesta.');
+  }
+
+  return NextResponse.json({ chats, auditoria, respuestas, desde, hasta, errores });
 }
