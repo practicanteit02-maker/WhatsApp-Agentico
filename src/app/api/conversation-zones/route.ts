@@ -27,11 +27,11 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null) as { threadKey?: string; zona?: string } | null;
   if (!body?.threadKey || !body.zona) {
-    return NextResponse.json({ error: 'Missing threadKey or zona' }, { status: 400 });
+    return NextResponse.json({ error: 'Missing threadKey or número' }, { status: 400 });
   }
 
   if (!isAssignableZone(body.zona)) {
-    return NextResponse.json({ error: `Zona inválida: ${body.zona}` }, { status: 400 });
+    return NextResponse.json({ error: `Número inválido: ${body.zona}` }, { status: 400 });
   }
 
   const zonaAnterior = await getZone(body.threadKey);

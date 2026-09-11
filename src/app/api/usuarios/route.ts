@@ -47,7 +47,7 @@ function validateBody(body: { correo?: string; perfil?: string; zona?: string } 
     return { error: `Perfil inválido: ${perfil}` };
   }
   if (zona && !isAssignableZone(zona)) {
-    return { error: `Zona inválida: ${zona}` };
+    return { error: `Número inválido: ${zona}` };
   }
 
   return { correo, perfil, zona };

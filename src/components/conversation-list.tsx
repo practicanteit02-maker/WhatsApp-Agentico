@@ -1311,7 +1311,7 @@ export function ConversationList({
                 {isZoneMenuOpen && (
                   <div
                     role="menu"
-                    aria-label="Números y zonas"
+                    aria-label="Números"
                     className="absolute left-0 top-[calc(100%+0.25rem)] z-50 w-48 rounded-xl border border-[var(--chat-border-strong)] bg-popover p-1 text-sm text-popover-foreground shadow-lg"
                   >
                     {MOCK_ZONE_OPTIONS.map((zone) => {
@@ -1432,7 +1432,7 @@ export function ConversationList({
                       amarillo para que se note que a esa persona le falta
                       asignación. */}
                   <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Perfil y zona
+                    Perfil y número
                   </p>
                   <div className="flex flex-col gap-1 px-2 pb-2">
                     {sessionPerfil === 'Sin asignar' ? (
@@ -1449,7 +1449,7 @@ export function ConversationList({
                     {sessionZona === 'Sin asignar' ? (
                       <span className="flex items-center gap-2 rounded-lg border border-[var(--chat-warning-border)] bg-[var(--chat-warning-background)] px-2 py-1.5 text-xs font-medium text-[var(--chat-warning-foreground)]">
                         <TriangleAlert className="size-3.5 flex-shrink-0" />
-                        Zona sin asignar
+                        Número sin asignar
                       </span>
                     ) : (
                       <span className="flex items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground">
@@ -1905,7 +1905,7 @@ export function ConversationList({
                             setZoneEditorThreadKey(thread.key);
                           }}
                           disabled={!canEditar}
-                          title={canEditar ? undefined : `Tu rol (${sessionPerfil}) no tiene permiso para reasignar zona`}
+                          title={canEditar ? undefined : `Tu rol (${sessionPerfil}) no tiene permiso para reasignar número`}
                           className={cn(
                             'inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-primary',
                             canEditar ? 'hover:bg-primary/25' : 'cursor-not-allowed opacity-50',
@@ -1918,7 +1918,7 @@ export function ConversationList({
                         {zoneEditorThreadKey === thread.key && zoneEditorPosition && createPortal(
                           <div
                             role="menu"
-                            aria-label="Asignar zona"
+                            aria-label="Asignar número"
                             data-zone-editor
                             style={{ position: 'fixed', top: zoneEditorPosition.top, right: zoneEditorPosition.right }}
                             className="z-50 w-36 rounded-md border border-[var(--chat-border-strong)] bg-popover p-1 text-sm text-popover-foreground shadow-lg"

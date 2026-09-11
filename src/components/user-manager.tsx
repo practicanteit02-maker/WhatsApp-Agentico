@@ -194,7 +194,7 @@ export function UserManager() {
           <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-3 border-b border-[var(--chat-border-strong)] bg-[var(--chat-hover)] px-3 py-2 text-xs font-medium text-muted-foreground">
             <span>Correo</span>
             <span>Perfil</span>
-            <span>Zona</span>
+            <span>Número</span>
             <span className="sr-only">Acciones</span>
           </div>
           {users.map((user) => (
@@ -274,7 +274,7 @@ export function UserManager() {
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="user-zona">Zona</Label>
+              <Label htmlFor="user-zona">Número</Label>
               <select
                 id="user-zona"
                 value={form.zona}

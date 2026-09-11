@@ -196,7 +196,7 @@ export function MetricsDashboard() {
               valor={coordinadorTop ? `${coordinadorTop.total}` : '—'}
               detalle={coordinadorTop?.actor}
             />
-            <Kpi etiqueta="Chats sin zona" valor={chats?.porZona['Sin asignar'] ?? '—'} />
+            <Kpi etiqueta="Chats sin número" valor={chats?.porZona['Sin asignar'] ?? '—'} />
           </div>
 
           {/* Chats por estado */}
@@ -223,7 +223,7 @@ export function MetricsDashboard() {
 
           {/* Chats por zona */}
           <Seccion
-            titulo="Chats por zona"
+            titulo="Chats por número"
             aviso={chats?.muestraParcial ? 'Muestra parcial (tope de páginas)' : undefined}
           >
             {chats ? (

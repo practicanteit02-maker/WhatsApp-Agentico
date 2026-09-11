@@ -33,7 +33,7 @@ function restarDias(dia: string, n: number): string {
 type AccionInfo = { label: string; grupo: 'Chats' | 'Plantillas' | 'Usuarios'; clase: string };
 
 const ACCIONES: Record<string, AccionInfo> = {
-  cambio_zona: { label: 'Cambio de zona', grupo: 'Chats', clase: 'bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300' },
+  cambio_zona: { label: 'Cambio de número', grupo: 'Chats', clase: 'bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300' },
   cambio_estado: { label: 'Cambio de estado', grupo: 'Chats', clase: 'bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300' },
   asignar_etiqueta: { label: 'Etiqueta asignada', grupo: 'Chats', clase: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300' },
   editar_etiqueta: { label: 'Etiqueta editada', grupo: 'Chats', clase: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300' },
