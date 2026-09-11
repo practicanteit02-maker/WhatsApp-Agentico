@@ -1458,11 +1458,21 @@ export function MessageView({
     setSending(true);
     try {
       const formData = new FormData();
+      // Funcionalidad "Contactos con username (BSUID)": se mandan los DOS
+      // cuando estén disponibles, no uno excluyendo al otro. threadKeyFor()
+      // (src/lib/inbox-data.ts) le da prioridad a businessScopedUserId sobre
+      // el teléfono al armar thread.key — exactamente el mismo cálculo que
+      // usa groupConversationsByPhoneNumber() para este contacto. Un
+      // contacto que empezó como "solo username" y que Meta después resolvió
+      // a un número real se queda con ambos datos a la vez (ver el
+      // comentario junto a threadKeyFor); si acá solo mandábamos `to`, el
+      // servidor recalculaba un threadKey sin el `bsuid:` y no coincidía con
+      // la fila real de zona — un chat con zona asignada y visible en la
+      // lista terminaba rechazado con "No tenés acceso a esta conversación".
       if (phoneNumber) {
         formData.append("to", phoneNumber);
-      } else if (businessScopedUserId) {
-        // Funcionalidad "Contactos con username (BSUID)": ver el comentario
-        // junto a la prop businessScopedUserId más arriba.
+      }
+      if (businessScopedUserId) {
         formData.append("businessScopedUserId", businessScopedUserId);
       }
       if (phoneNumberId) {

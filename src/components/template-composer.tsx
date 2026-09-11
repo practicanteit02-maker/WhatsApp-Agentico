@@ -258,7 +258,18 @@ export function TemplateComposer({ phoneNumber, businessScopedUserId, phoneNumbe
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...(phoneNumber ? { to: phoneNumber } : { businessScopedUserId }),
+          // Funcionalidad "Contactos con username (BSUID)": se mandan los
+          // DOS cuando estén disponibles, no uno excluyendo al otro — mismo
+          // motivo que en message-view.tsx (ver el comentario junto a
+          // handleSendMessage): threadKeyFor() le da prioridad a
+          // businessScopedUserId sobre el teléfono al armar thread.key, y un
+          // contacto que empezó como "solo username" resuelto después a un
+          // número real se queda con ambos datos a la vez. Mandar solo `to`
+          // acá hacía que el servidor recalculara un threadKey sin el
+          // `bsuid:` y rechazara el envío con "No tenés acceso a esta
+          // conversación", aunque el chat tuviera zona asignada y visible.
+          ...(phoneNumber ? { to: phoneNumber } : {}),
+          ...(businessScopedUserId ? { businessScopedUserId } : {}),
           phoneNumberId,
           templateName: selectedTemplate.name,
           languageCode: selectedTemplate.language,
