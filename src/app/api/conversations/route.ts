@@ -198,6 +198,18 @@ export async function GET(request: Request) {
                 phoneNumber: conversation.phoneNumber ?? '',
                 status: conversation.status ?? 'unknown',
                 lastActiveAt: typeof conversation.lastActiveAt === 'string' ? conversation.lastActiveAt : undefined,
+                // Funcionalidad "Alerta de tiempo de respuesta": timestamps
+                // crudos que Kapso ya manda en esta misma respuesta (no es una
+                // consulta nueva) y que parseDirection() de acá arriba ya usa
+                // para decidir 'inbound'/'outbound' — antes se calculaba el
+                // resultado y se descartaban los timestamps. Se reenvían tal
+                // cual para que el cliente calcule "cuánto tiempo lleva sin
+                // respuesta" contra el reloj actual (ver isThreadInAlert en
+                // conversation-list.tsx) sin depender de la lógica de
+                // "preview" de lastMessage (que tiene el caso especial de
+                // reacciones ocultas, ver findFallbackLastMessage).
+                lastInboundAt: typeof kapso?.lastInboundAt === 'string' ? kapso.lastInboundAt : undefined,
+                lastOutboundAt: typeof kapso?.lastOutboundAt === 'string' ? kapso.lastOutboundAt : undefined,
                 phoneNumberId,
                 inboxPhoneNumber: sourcePhoneNumber.display_phone_number,
                 inboxDisplayName: sourcePhoneNumber.display_name ?? sourcePhoneNumber.verified_name ?? sourcePhoneNumber.name,

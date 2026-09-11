@@ -27,6 +27,13 @@ export type Conversation = {
     direction: string;
     type?: string;
   };
+  /** Funcionalidad "Alerta de tiempo de respuesta": timestamps crudos de
+   * Kapso (ver api/conversations/route.ts), independientes de la lógica de
+   * "preview" de lastMessage — el momento del último mensaje entrante y del
+   * último saliente de esta conversación, o undefined si Kapso no lo mandó
+   * (conversación sin mensajes en esa dirección todavía). */
+  lastInboundAt?: string;
+  lastOutboundAt?: string;
 };
 
 export type Message = {
@@ -82,6 +89,9 @@ export type ConversationThread = {
   status: string;
   lastActiveAt?: string;
   lastMessage?: Conversation['lastMessage'];
+  /** Ver el comentario junto a Conversation['lastInboundAt']. */
+  lastInboundAt?: string;
+  lastOutboundAt?: string;
 };
 
 export const CONVERSATIONS_QUERY_KEY = ['conversations'] as const;
@@ -324,6 +334,8 @@ export function groupConversationsByPhoneNumber(conversations: Conversation[]): 
         status: latestConversation.status,
         lastActiveAt: latestConversation.lastActiveAt,
         lastMessage: latestConversation.lastMessage,
+        lastInboundAt: latestConversation.lastInboundAt,
+        lastOutboundAt: latestConversation.lastOutboundAt,
       };
     })
     .sort((a, b) => byMostRecentConversation(a.latestConversation, b.latestConversation));

@@ -217,6 +217,35 @@ function isThreadMarkedUnread(
   return getThreadUnreadCount(thread, seenCounts) > 0 || manuallyUnreadThreadKeys.has(thread.key);
 }
 
+/** Funcionalidad "Alerta de tiempo de respuesta": un chat lleva más de este
+ * umbral sin que un agente le responda al cliente, se marca como "en
+ * alerta" (ver isThreadInAlert). */
+const RESPONSE_ALERT_THRESHOLD_MS = 15 * 60 * 1000;
+
+/**
+ * ¿Este chat lleva más de RESPONSE_ALERT_THRESHOLD_MS sin respuesta? Se
+ * calcula directo desde lastInboundAt/lastOutboundAt (timestamps crudos de
+ * Kapso, ver api/conversations/route.ts) en vez de reusar
+ * thread.lastMessage?.direction, a propósito: ese último campo sale de la
+ * lógica de "preview" de la lista (que tiene un caso especial para
+ * reacciones ocultas, ver findFallbackLastMessage en route.ts) y podría no
+ * coincidir exactamente con cuál de los dos timestamps es más reciente.
+ *
+ * `now` se recibe como parámetro (no se usa Date.now() acá adentro) para que
+ * el resultado se pueda recalcular en cada tick del timer local sin
+ * depender de que lleguen datos nuevos del servidor — ver el estado
+ * `alertNowTick` más abajo.
+ */
+function isThreadInAlert(thread: ConversationThread, now: number): boolean {
+  const inboundAt = parseTimestamp(thread.lastInboundAt);
+  if (!inboundAt) return false;
+
+  const outboundAt = parseTimestamp(thread.lastOutboundAt);
+  if (outboundAt >= inboundAt) return false;
+
+  return now - inboundAt > RESPONSE_ALERT_THRESHOLD_MS;
+}
+
 /** Hora compacta para la fila de un chat: "14:32" si es hoy, "Yesterday" si fue ayer, o "Aug 20" más atrás. */
 function formatThreadTimestamp(timestamp?: string): string {
   if (!timestamp) return '';
@@ -290,9 +319,23 @@ export function ConversationList({
   const [searchQuery, setSearchQuery] = useState('');
   // Funcionalidad "Nuevo chat": ver new-chat-dialog.tsx.
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
-  // Pestañas "Todos" / "No leídos" del header de la lista (ver los botones y
-  // el filtro más abajo en este archivo).
-  const [unreadOnly, setUnreadOnly] = useState(false);
+  // Pestañas "Todos" / "No leídos" / "En alerta" del header de la lista (ver
+  // los botones y el filtro más abajo en este archivo). Un solo estado de
+  // tres valores en vez de dos booleanos independientes — así no existe la
+  // combinación inválida "No leídos" + "En alerta" a la vez.
+  const [listFilter, setListFilter] = useState<'todos' | 'no-leidos' | 'alerta'>('todos');
+
+  /** Funcionalidad "Alerta de tiempo de respuesta": los 15 minutos son
+   * relativos al reloj actual, así que un chat puede cruzar el umbral entre
+   * dos refetches de la lista sin que ningún dato haya cambiado (ver
+   * isThreadInAlert más arriba). Este tick NO hace ninguna llamada de red —
+   * solo fuerza un recálculo local cada 30s para que la marca/contador se
+   * mantengan al día. */
+  const [alertNowTick, setAlertNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setAlertNowTick(Date.now()), 30_000);
+    return () => clearInterval(interval);
+  }, []);
   const [refreshing, setRefreshing] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermissionState>('default');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -702,6 +745,20 @@ export function ConversationList({
     [threads, archivedThreadKeys, threadSeenCounts, manuallyUnreadThreadKeys, activeZone, zoneMap],
   );
 
+  /** Funcionalidad "Alerta de tiempo de respuesta": cuántos chats de la
+   * bandeja normal (nunca los archivados — un chat archivado ya se dio por
+   * cerrado) llevan más de 15 minutos sin respuesta. Alimenta tanto el
+   * número de la pestaña "En alerta" como, indirectamente, la marca en cada
+   * tarjeta (misma condición, ver isThreadInAlert). */
+  const alertCount = useMemo(
+    () => threads.filter((thread) =>
+      !archivedThreadKeys.has(thread.key)
+      && isThreadInAlert(thread, alertNowTick)
+      && (activeZone === 'Todos mis números' || zoneMap[thread.key] === activeZone)
+    ).length,
+    [threads, archivedThreadKeys, alertNowTick, activeZone, zoneMap],
+  );
+
   const filteredThreads = useMemo(() => {
     const searchMatched = filterConversationThreads(threads, 'all', searchQuery);
 
@@ -715,10 +772,11 @@ export function ConversationList({
         return archivedThreadKeys.has(thread.key);
       }
       if (archivedThreadKeys.has(thread.key)) return false;
-      if (unreadOnly && !isThreadMarkedUnread(thread, threadSeenCounts, manuallyUnreadThreadKeys)) return false;
+      if (listFilter === 'no-leidos' && !isThreadMarkedUnread(thread, threadSeenCounts, manuallyUnreadThreadKeys)) return false;
+      if (listFilter === 'alerta' && !isThreadInAlert(thread, alertNowTick)) return false;
       return true;
     });
-  }, [threads, searchQuery, viewingArchived, archivedThreadKeys, unreadOnly, threadSeenCounts, manuallyUnreadThreadKeys, activeZone, zoneMap]);
+  }, [threads, searchQuery, viewingArchived, archivedThreadKeys, listFilter, threadSeenCounts, manuallyUnreadThreadKeys, alertNowTick, activeZone, zoneMap]);
 
   /** Funcionalidad "Números/Zonas": si la zona elegida tiene al menos un
    * número en la bandeja normal (sin contar archivados) — para distinguir
@@ -1498,23 +1556,29 @@ export function ConversationList({
           />
         </div>
         <div className="mt-2 flex items-center gap-2">
-          {/* Pestañas "Todos" / "No leídos" — controlan el filtro `unreadOnly`
-              (estado más arriba en este mismo archivo, y usado en el filtro
-              `filteredThreads` unas líneas abajo del estado). */}
+          {/* Pestañas "Todos" / "No leídos" / "En alerta" — controlan el
+              filtro `listFilter` (estado más arriba en este mismo archivo, y
+              usado en el filtro `filteredThreads` unas líneas abajo del
+              estado). "En alerta" es la funcionalidad "Alerta de tiempo de
+              respuesta": chats de la bandeja normal con más de 15 minutos
+              sin respuesta (ver isThreadInAlert e alertCount más arriba) —
+              usa --destructive, no --primary, para no confundirse
+              visualmente con el rojo de marca que ya usa "No leídos" y el
+              badge del avatar. */}
           {!viewingArchived && (
             <>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setUnreadOnly(false)}
+                onClick={() => setListFilter('todos')}
                 className={cn(
                   "h-8 rounded-full border px-3.5 text-xs font-semibold",
-                  !unreadOnly
+                  listFilter === 'todos'
                     ? "border-primary/40 bg-primary/15 text-primary hover:bg-primary/25"
                     : "border-[var(--chat-border-strong)] bg-transparent font-medium text-muted-foreground hover:bg-[var(--chat-hover)] hover:text-foreground",
                 )}
-                aria-pressed={!unreadOnly}
+                aria-pressed={listFilter === 'todos'}
               >
                 Todos
               </Button>
@@ -1522,16 +1586,31 @@ export function ConversationList({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setUnreadOnly(true)}
+                onClick={() => setListFilter('no-leidos')}
                 className={cn(
                   "h-8 rounded-full border px-3.5 text-xs font-semibold",
-                  unreadOnly
+                  listFilter === 'no-leidos'
                     ? "border-primary/40 bg-primary/15 text-primary hover:bg-primary/25"
                     : "border-[var(--chat-border-strong)] bg-transparent font-medium text-muted-foreground hover:bg-[var(--chat-hover)] hover:text-foreground",
                 )}
-                aria-pressed={unreadOnly}
+                aria-pressed={listFilter === 'no-leidos'}
               >
                 No leídos
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setListFilter('alerta')}
+                className={cn(
+                  "h-8 rounded-full border px-3.5 text-xs font-semibold tabular-nums",
+                  listFilter === 'alerta'
+                    ? "border-destructive/40 bg-destructive/15 text-destructive hover:bg-destructive/25"
+                    : "border-[var(--chat-border-strong)] bg-transparent font-medium text-muted-foreground hover:bg-[var(--chat-hover)] hover:text-foreground",
+                )}
+                aria-pressed={listFilter === 'alerta'}
+              >
+                En alerta{alertCount > 0 ? ` ${alertCount}` : ''}
               </Button>
             </>
           )}
@@ -1727,9 +1806,11 @@ export function ConversationList({
                 // leídos los que faltan, se deja el mensaje de "No leídos".
                 : !activeZoneHasThreads
                   ? `No hay números en ${activeZone}`
-                  : unreadOnly
+                  : listFilter === 'no-leidos'
                     ? 'No unread chats'
-                    : 'No conversations found'}
+                    : listFilter === 'alerta'
+                      ? 'Ningún chat en alerta'
+                      : 'No conversations found'}
           </div>
         ) : (
           <div className="w-full overflow-hidden">
@@ -1737,6 +1818,12 @@ export function ConversationList({
               const isArchived = archivedThreadKeys.has(thread.key);
               const unreadCount = getThreadUnreadCount(thread, threadSeenCounts);
               const isMarkedUnread = isThreadMarkedUnread(thread, threadSeenCounts, manuallyUnreadThreadKeys);
+
+              // Funcionalidad "Alerta de tiempo de respuesta": nunca marca
+              // filas archivadas — en la vista normal ya están excluidas de
+              // filteredThreads, y en la vista archivada isArchived es
+              // siempre true acá, así que esta condición alcanza sola.
+              const inAlert = !isArchived && isThreadInAlert(thread, alertNowTick);
 
               // Funcionalidad "Seleccionar chats": esta fila está marcada en el modo de selección múltiple.
               const isSelectedForBulk = selectedThreadKeysForBulk.has(thread.key);
@@ -1776,7 +1863,14 @@ export function ConversationList({
                     setOpenRowMenuKey(thread.key);
                   }}
                   className={cn(
-                    'relative min-h-[68px] w-full cursor-pointer touch-manipulation overflow-hidden border-b border-[var(--chat-border)] px-3 py-2 text-left transition-colors hover:bg-[var(--chat-hover)]',
+                    'relative min-h-[68px] w-full cursor-pointer touch-manipulation overflow-hidden border-b border-l-[3px] border-[var(--chat-border)] px-3 py-2 text-left transition-colors hover:bg-[var(--chat-hover)]',
+                    // Funcionalidad "Alerta de tiempo de respuesta": franja
+                    // izquierda en --destructive (no --primary, para no
+                    // confundirse con el rojo de marca del badge de no
+                    // leídos de más abajo) — border-l-[3px] ya está en la
+                    // clase base de arriba con el color neutro por defecto,
+                    // acá solo se pisa el color cuando corresponde.
+                    inAlert ? 'border-l-destructive' : 'border-l-transparent',
                     selectedThreadKey === thread.key && 'bg-[var(--chat-hover)]',
                     isSelectedForBulk && 'bg-primary/10'
                   )}
