@@ -47,12 +47,15 @@ import {
   conversationMessagesQueryKey,
   fetchChatAiConfig,
   fetchConversationMessages,
+  fetchMessageEdits,
   fetchQuickReplies,
+  messageEditsQueryKey,
   normalizeMessages,
   parseTimestamp,
   phoneThreadMessagesQueryKey,
   threadKeyFor,
 } from "@/lib/inbox-data";
+import type { EdicionMensaje } from "@/lib/message-edits";
 import { isMessageStarred, type StarredMessage } from "@/lib/starred-messages";
 import { MediaMessage } from "@/components/media-message";
 import { TemplateComposer } from "@/components/template-composer";
@@ -342,7 +345,27 @@ function isGeneratedAttachmentDisplayContent(content: string): boolean {
 // documentos) se les colaba ese texto crudo debajo de la burbuja.
 const MESSAGE_TYPES_WITH_GENERATED_CONTENT = new Set(['image', 'video', 'document', 'sticker']);
 
-function getDisplayMessageContent(message: Message): string | null {
+/**
+ * Funcionalidad "Mostrar cuando un cliente edita un mensaje": si este
+ * mensaje tiene una fila en edicionesMap (ver /api/message-edits), se
+ * muestra el texto editado en vez del original — sin pasar por ninguna de
+ * las normalizaciones de abajo (transcripción de audio, texto autogenerado
+ * de adjuntos), porque una edición siempre es texto plano escrito por el
+ * cliente, nunca el mensaje que se está editando es un adjunto. El mapa es
+ * opcional (default {}) para que las pantallas/casos que todavía no lo
+ * cargan (ej. la burbuja de un mensaje optimista recién enviado) sigan
+ * funcionando exactamente igual que antes.
+ */
+function getDisplayMessageContent(
+  message: Message,
+  edicionesMap: Record<string, EdicionMensaje> = {},
+): string | null {
+  const edicion = edicionesMap[message.id];
+  if (edicion) {
+    const textoEditado = edicion.texto.trim();
+    return textoEditado || null;
+  }
+
   if (!message.content || message.content === "[Image attached]") {
     return null;
   }
@@ -407,8 +430,8 @@ function formatWhatsAppText(text: string): ReactNode {
   return nodes;
 }
 
-function getReplyPreviewContent(message: Message): string {
-  const content = getDisplayMessageContent(message) || message.caption || message.filename || '';
+function getReplyPreviewContent(message: Message, edicionesMap: Record<string, EdicionMensaje> = {}): string {
+  const content = getDisplayMessageContent(message, edicionesMap) || message.caption || message.filename || '';
   const trimmedContent = content.trim();
 
   if (trimmedContent) {
@@ -612,6 +635,21 @@ export function MessageView({
     [phoneNumberId, phoneNumber, businessScopedUserId],
   );
 
+  // Funcionalidad "Mostrar cuando un cliente edita un mensaje": mapa
+  // { messageId: { texto, editadoEn } } de este chat (ver
+  // src/lib/message-edits.ts y /api/message-edits) — se pide junto con los
+  // mensajes, sin reemplazar esa carga. Sin refetchInterval propio a
+  // propósito (mismo criterio que la sesión de rendimiento: no agregar
+  // sondeo nuevo) — una edición de cliente es un evento raro, así que
+  // alcanza con el refetch por defecto al volver a la pestaña
+  // (refetchOnWindowFocus global) y con reabrir el chat.
+  const { data: edicionesMap = {} } = useQuery({
+    queryKey: messageEditsQueryKey(collabThreadKey),
+    queryFn: () => fetchMessageEdits(collabThreadKey!),
+    enabled: Boolean(collabThreadKey),
+    staleTime: 60_000,
+  });
+
   // Funcionalidad "IA por chat": si la IA responde automáticamente al abrir
   // ESTE chat (ver src/lib/chat-ai-config.ts) — apagado por defecto, se
   // prende/apaga a mano con el botón del header más abajo.
@@ -765,11 +803,11 @@ export function MessageView({
       threadKey: threadKeyFor(phoneNumberId, phoneNumber ?? "", undefined, businessScopedUserId),
       contactName,
       phoneNumber,
-      content: getDisplayMessageContent(message) || message.caption || "",
+      content: getDisplayMessageContent(message, edicionesMap) || message.caption || "",
       direction: message.direction,
       createdAt: message.createdAt,
     });
-  }, [onToggleStarredMessage, phoneNumberId, phoneNumber, businessScopedUserId, contactName]);
+  }, [onToggleStarredMessage, phoneNumberId, phoneNumber, businessScopedUserId, contactName, edicionesMap]);
 
   /** Funcionalidad "Reaccionar a un mensaje": clic en un emoji del selector. */
   const handleSendReaction = useCallback(async (message: Message, emoji: string) => {
@@ -826,7 +864,7 @@ export function MessageView({
         repliedTo: {
           id: replyTarget.id,
           conversationId: replyTarget.conversationId,
-          content: getReplyPreviewContent(replyTarget),
+          content: getReplyPreviewContent(replyTarget, edicionesMap),
           direction: replyTarget.direction,
           messageType: replyTarget.messageType,
           senderName: getMessageSenderLabel(replyTarget, contactName, phoneNumber),
@@ -834,7 +872,7 @@ export function MessageView({
         createdAt: Date.now(),
       },
     });
-  }, [contactName, persistLocalReplyContexts, phoneNumber]);
+  }, [contactName, persistLocalReplyContexts, phoneNumber, edicionesMap]);
 
   const applyLocalReplyContexts = useCallback((inputMessages: Message[]) => {
     const localReplyContexts = localReplyContextsRef.current;
@@ -1870,7 +1908,11 @@ export function MessageView({
                 message,
                 prevMessage,
               );
-              const displayMessageContent = getDisplayMessageContent(message);
+              const displayMessageContent = getDisplayMessageContent(message, edicionesMap);
+              // Funcionalidad "Mostrar cuando un cliente edita un mensaje":
+              // solo la etiqueta "Editado" — el texto en sí ya salió
+              // reemplazado de getDisplayMessageContent de arriba.
+              const isEdited = Boolean(edicionesMap[message.id]);
               // Burbuja "transparente" para fotos/videos sin texto propio (ni
               // caption ni contenido) — en vez de la burbuja de color de
               // siempre con la imagen adentro (que se ve como un marco
@@ -2185,6 +2227,20 @@ export function MessageView({
                             : "mt-1",
                         )}
                       >
+                        {/* Funcionalidad "Mostrar cuando un cliente edita un
+                            mensaje": etiqueta discreta junto a la hora, mismo
+                            lugar que usa WhatsApp real — sin tocar el layout
+                            para los mensajes sin editar (isEdited es false la
+                            inmensa mayoría de las veces). */}
+                        {isEdited && (
+                          <span className={cn(
+                            "text-[11px] italic",
+                            isMediaOnlyBubble ? "text-white/80" : "text-muted-foreground",
+                          )}>
+                            Editado
+                          </span>
+                        )}
+
                         <span className={cn(
                           "text-[11px] tabular-nums",
                           isMediaOnlyBubble ? "text-white" : "text-muted-foreground",
@@ -2370,7 +2426,7 @@ export function MessageView({
                       Replying to {getMessageSenderLabel(replyingToMessage, contactName, phoneNumber)}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {formatWhatsAppText(getReplyPreviewContent(replyingToMessage))}
+                      {formatWhatsAppText(getReplyPreviewContent(replyingToMessage, edicionesMap))}
                     </p>
                   </div>
                   <Button

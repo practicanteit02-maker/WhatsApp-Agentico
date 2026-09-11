@@ -1,4 +1,5 @@
 import type { MediaData } from '@kapso/whatsapp-cloud-api';
+import type { EdicionMensaje } from '@/lib/message-edits';
 
 export type ConversationStatusFilter = 'all' | 'active' | 'ended';
 
@@ -106,6 +107,29 @@ export function phoneThreadMessagesQueryKey(
   conversationIds: string[]
 ) {
   return ['phone-thread-messages', phoneNumberId ?? '', phoneNumber ?? '', conversationIds.join(':')] as const;
+}
+
+/** Funcionalidad "Mostrar cuando un cliente edita un mensaje": ver
+ * src/lib/message-edits.ts y /api/message-edits. Parametrizada por
+ * threadKey (no por conversationId) porque las ediciones se guardan por
+ * chat completo, igual que la zona/estado/etiqueta — no por cada
+ * conversación individual dentro del hilo. */
+export function messageEditsQueryKey(threadKey: string | null) {
+  return ['message-edits', threadKey ?? ''] as const;
+}
+
+/** Ver el comentario junto a messageEditsQueryKey — mapa
+ * `{ [messageId]: { texto, editadoEn } }` de todas las ediciones guardadas
+ * para este chat. */
+export async function fetchMessageEdits(threadKey: string): Promise<Record<string, EdicionMensaje>> {
+  const response = await fetch(`/api/message-edits?threadKey=${encodeURIComponent(threadKey)}`);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to fetch message edits');
+  }
+
+  return data || {};
 }
 
 export function parseTimestamp(timestamp?: string): number {
