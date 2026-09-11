@@ -3,6 +3,7 @@ import { buildTemplateSendPayload } from '@kapso/whatsapp-cloud-api';
 import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inbox-settings';
 import { checkZoneAccess } from '@/lib/conversation-zones';
 import { threadKeyFor } from '@/lib/inbox-data';
+import { extractMensajeId, registrarRespuesta } from '@/lib/respuestas';
 import { whatsappClient } from '@/lib/whatsapp-client';
 import { requierePermiso } from '@/lib/require-permission';
 import type { TemplateParameterInfo } from '@/types/whatsapp';
@@ -32,7 +33,15 @@ export async function POST(request: Request) {
       templateCategory,
       parameters,
       parameterInfo,
-      phoneNumberId: requestedPhoneNumberId
+      phoneNumberId: requestedPhoneNumberId,
+      // Funcionalidad "Tiempo de respuesta por persona" (base): ver el
+      // comentario junto a estos mismos campos en
+      // src/app/api/messages/send/route.ts. TemplateComposer no tiene el
+      // hilo de mensajes cargado (a diferencia del compositor normal), así
+      // que en la práctica estos suelen venir vacíos — no bloquea el
+      // registro, solo se guarda sin el snapshot.
+      ultimoInboundEn,
+      segundosDesdeUltimoInbound
     } = body;
     const phoneNumber = await resolvePhoneNumberContext(requestedPhoneNumberId);
     const phoneNumberId = phoneNumber.phone_number_id;
@@ -185,6 +194,16 @@ export async function POST(request: Request) {
           to,
           template: templatePayload
         });
+
+    // Funcionalidad "Tiempo de respuesta por persona" (base): ver
+    // src/lib/respuestas.ts.
+    await registrarRespuesta({
+      threadKey,
+      canal: 'plantilla',
+      mensajeId: extractMensajeId(result),
+      segundosDesdeUltimoInbound: typeof segundosDesdeUltimoInbound === 'number' ? segundosDesdeUltimoInbound : undefined,
+      ultimoInboundEn: typeof ultimoInboundEn === 'string' ? ultimoInboundEn : undefined,
+    });
 
     return NextResponse.json(result);
   } catch (error) {

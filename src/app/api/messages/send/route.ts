@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inbox-settings';
 import { checkZoneAccess } from '@/lib/conversation-zones';
 import { threadKeyFor } from '@/lib/inbox-data';
+import { extractMensajeId, registrarRespuesta } from '@/lib/respuestas';
 import { whatsappClient } from '@/lib/whatsapp-client';
 import { requierePermiso } from '@/lib/require-permission';
 
@@ -54,6 +55,13 @@ export async function POST(request: Request) {
     const body = formData.get('body') as string;
     const file = formData.get('file') as File | null;
     const contextMessageId = (formData.get('contextMessageId') as string | null)?.trim() || undefined;
+    // Funcionalidad "Tiempo de respuesta por persona" (base): snapshot
+    // opcional que ya trae calculado el cliente (ver handleSendMessage en
+    // message-view.tsx) — no se recalcula acá para no agregarle una consulta
+    // extra a Kapso al camino caliente del envío (ver src/lib/respuestas.ts).
+    const ultimoInboundEn = (formData.get('ultimoInboundEn') as string | null)?.trim() || undefined;
+    const segundosDesdeUltimoInboundRaw = formData.get('segundosDesdeUltimoInbound') as string | null;
+    const segundosDesdeUltimoInbound = segundosDesdeUltimoInboundRaw ? Number(segundosDesdeUltimoInboundRaw) : undefined;
     const configuredPhoneNumber = await resolvePhoneNumberContext(formData.get('phoneNumberId') as string | undefined);
     const phoneNumberId = configuredPhoneNumber.phone_number_id;
 
@@ -152,6 +160,17 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Funcionalidad "Tiempo de respuesta por persona" (base): registra quién
+    // mandó este mensaje y cuándo — ver src/lib/respuestas.ts. Sin
+    // sub-tipos: tanto texto como archivo caen bajo canal 'texto'.
+    await registrarRespuesta({
+      threadKey,
+      canal: 'texto',
+      mensajeId: extractMensajeId(result),
+      segundosDesdeUltimoInbound,
+      ultimoInboundEn,
+    });
 
     return NextResponse.json(
       typeof result === 'object' && result !== null

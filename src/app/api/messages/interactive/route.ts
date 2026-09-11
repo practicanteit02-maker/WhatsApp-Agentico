@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inbox-settings';
 import { checkZoneAccess } from '@/lib/conversation-zones';
 import { threadKeyFor } from '@/lib/inbox-data';
+import { extractMensajeId, registrarRespuesta } from '@/lib/respuestas';
 import { whatsappClient } from '@/lib/whatsapp-client';
 import { requierePermiso } from '@/lib/require-permission';
 
@@ -11,7 +12,19 @@ export async function POST(request: Request) {
     if (denegado) return denegado;
 
     const body = await request.json();
-    const { phoneNumber, businessScopedUserId, header, body: bodyText, buttons, phoneNumberId: requestedPhoneNumberId } = body;
+    const {
+      phoneNumber,
+      businessScopedUserId,
+      header,
+      body: bodyText,
+      buttons,
+      phoneNumberId: requestedPhoneNumberId,
+      // Funcionalidad "Tiempo de respuesta por persona" (base): ver el
+      // comentario junto a estos mismos campos en
+      // src/app/api/messages/send/route.ts.
+      ultimoInboundEn,
+      segundosDesdeUltimoInbound,
+    } = body;
     const configuredPhoneNumber = await resolvePhoneNumberContext(requestedPhoneNumberId);
     const phoneNumberId = configuredPhoneNumber.phone_number_id;
 
@@ -66,6 +79,16 @@ export async function POST(request: Request) {
 
     // Send interactive button message
     const result = await whatsappClient.messages.sendInteractiveButtons(payload);
+
+    // Funcionalidad "Tiempo de respuesta por persona" (base): ver
+    // src/lib/respuestas.ts.
+    await registrarRespuesta({
+      threadKey,
+      canal: 'interactivo',
+      mensajeId: extractMensajeId(result),
+      segundosDesdeUltimoInbound: typeof segundosDesdeUltimoInbound === 'number' ? segundosDesdeUltimoInbound : undefined,
+      ultimoInboundEn: typeof ultimoInboundEn === 'string' ? ultimoInboundEn : undefined,
+    });
 
     return NextResponse.json(result);
   } catch (error) {

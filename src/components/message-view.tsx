@@ -1484,6 +1484,21 @@ export function MessageView({
         formData.append("file", fileToSend);
       }
 
+      // Funcionalidad "Tiempo de respuesta por persona" (base): este
+      // compositor ya tiene el hilo cargado en memoria (`messages`, ordenado
+      // ascendente por normalizeMessages), así que el último inbound sale de
+      // ahí directo — sin pedirle nada extra a Kapso antes de mandar (ver el
+      // comentario en src/lib/respuestas.ts sobre por qué no se calcula esto
+      // en el servidor). Si el chat no tiene ningún inbound todavía (ej.
+      // recién arrancado con una plantilla), se manda sin estos dos campos —
+      // el registro se guarda igual, solo sin el snapshot.
+      const lastInboundMessage = messages.filter((m) => m.direction === "inbound").at(-1);
+      if (lastInboundMessage) {
+        const segundos = Math.max(0, Math.round((Date.now() - parseTimestamp(lastInboundMessage.createdAt)) / 1000));
+        formData.append("ultimoInboundEn", lastInboundMessage.createdAt);
+        formData.append("segundosDesdeUltimoInbound", String(segundos));
+      }
+
       const response = await fetch("/api/messages/send", {
         method: "POST",
         body: formData,
