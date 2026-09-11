@@ -124,3 +124,19 @@ export function esAdministrador(perfil: string | undefined | null): boolean {
   if (!perfil) return false;
   return normalizarRol(perfil) === 'Administrador';
 }
+
+/**
+ * Único lugar del proyecto que decide "¿es este el rol Coordinadora?" —
+ * mismo criterio que esAdministrador(): pasa por normalizarRol() para que
+ * "Coordinador" (alias masculino) cuente exactamente igual. Se usa para el
+ * panel personal "Mis estadísticas" (/mis-estadisticas y su ícono en
+ * conversation-list.tsx), que es exclusivo de Coordinadora — Administrador
+ * queda afuera a propósito porque ya ve esos mismos números (incluidos los
+ * suyos) dentro del dashboard general de Métricas, así que ofrecerle además
+ * el panel personal sería redundante. No usar puedeSePuede(perfil,
+ * 'escribir') para este gate: ese permiso también lo tiene Administrador.
+ */
+export function esCoordinadora(perfil: string | undefined | null): boolean {
+  if (!perfil) return false;
+  return normalizarRol(perfil) === 'Coordinadora';
+}

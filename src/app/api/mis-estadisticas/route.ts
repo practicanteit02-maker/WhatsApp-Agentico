@@ -2,15 +2,15 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { diaBogota, restarDias } from '@/lib/auditoria';
 import { agregarRespuestas } from '@/lib/respuestas-metrics';
-import { puedeSePuede } from '@/lib/permissions';
+import { esCoordinadora } from '@/lib/permissions';
 
 /**
  * Panel personal "Mis estadísticas" (ver src/components/mis-estadisticas-view.tsx):
  * cada persona ve sus propios números — chats atendidos, su tiempo de
- * respuesta promedio, su matriz de actividad. Disponible para quien puede
- * responder chats (permiso "escribir" — Administrador y Coordinadora; QA no,
- * ya que QA no responde chats), no solo Administrador como el resto de las
- * pantallas de /api/metrics.
+ * respuesta promedio, su matriz de actividad. Exclusivo del rol Coordinadora
+ * (ver esCoordinadora() en permissions.ts) — Administrador queda afuera a
+ * propósito porque ya ve esos mismos números, incluidos los suyos, dentro
+ * del dashboard general de /api/metrics.
  *
  * El actor SIEMPRE es el correo de la sesión real (`session.user.email`) —
  * este endpoint no acepta ningún `actor` por query string. Es justamente lo
@@ -26,9 +26,9 @@ export async function GET(request: Request) {
   const correo = session?.user?.email;
   const perfil = session?.user?.perfil ?? '';
 
-  if (!correo || !puedeSePuede(perfil, 'escribir')) {
+  if (!correo || !esCoordinadora(perfil)) {
     return NextResponse.json(
-      { error: 'Esta sección es solo para perfiles que pueden responder chats (Administrador y Coordinadora)' },
+      { error: 'Esta sección es exclusiva del rol Coordinadora' },
       { status: 403 }
     );
   }

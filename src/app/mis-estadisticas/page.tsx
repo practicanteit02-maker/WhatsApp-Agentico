@@ -2,19 +2,21 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ArrowLeft, LineChart, ShieldAlert } from 'lucide-react';
 import { auth } from '@/auth';
-import { puedeSePuede } from '@/lib/permissions';
+import { esCoordinadora } from '@/lib/permissions';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { MisEstadisticasView } from '@/components/mis-estadisticas-view';
 
 /**
  * Pantalla "Mis estadísticas" — a diferencia de /auditoria y /metricas (solo
- * Administrador), acá el gate es el permiso "escribir" (Administrador y
- * Coordinadora; QA no, porque QA no responde chats). Mismo patrón
- * server-side que el resto: el chequeo se hace acá, antes de mandar nada al
- * navegador. El middleware (src/middleware.ts) ya garantiza que solo se
- * llega hasta acá con una sesión real — el `redirect('/login')` es un
- * respaldo.
+ * Administrador), acá el gate es esCoordinadora(): exclusivo de Coordinadora.
+ * Administrador queda afuera a propósito (ver esCoordinadora() en
+ * permissions.ts) porque ya ve esos mismos números, incluidos los suyos,
+ * dentro del dashboard general de Métricas — tener ambos sería redundante.
+ * Mismo patrón server-side que el resto: el chequeo se hace acá, antes de
+ * mandar nada al navegador. El middleware (src/middleware.ts) ya garantiza
+ * que solo se llega hasta acá con una sesión real — el `redirect('/login')`
+ * es un respaldo.
  */
 export default async function MisEstadisticasPage() {
   const session = await auth();
@@ -23,7 +25,7 @@ export default async function MisEstadisticasPage() {
     redirect('/login');
   }
 
-  if (!puedeSePuede(session.user.perfil, 'escribir')) {
+  if (!esCoordinadora(session.user.perfil)) {
     return (
       <div className="flex h-dvh min-h-dvh items-center justify-center bg-background px-4 text-foreground">
         <div className="w-full max-w-sm rounded-2xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface)] p-8 text-center shadow-lg">
@@ -32,7 +34,7 @@ export default async function MisEstadisticasPage() {
           </span>
           <h1 className="mt-5 text-lg font-semibold text-foreground">Acceso denegado</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Esta sección es solo para perfiles que pueden responder chats.
+            Esta sección es exclusiva del rol Coordinadora.
           </p>
           <Button asChild className="mt-6 w-full">
             <Link href="/">Volver al inbox</Link>

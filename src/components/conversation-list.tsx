@@ -38,7 +38,7 @@ import { NewChatDialog } from '@/components/new-chat-dialog';
 import { type StarredMessage } from '@/lib/starred-messages';
 import { getProfileStyle } from '@/lib/mock-profiles';
 import { getAssignableZones, MOCK_ZONE_OPTIONS } from '@/lib/mock-zones';
-import { esAdministrador, puedeSePuede } from '@/lib/permissions';
+import { esAdministrador, esCoordinadora, puedeSePuede } from '@/lib/permissions';
 import { ASSIGNABLE_STATUSES, type ChatStatus } from '@/lib/chat-status';
 
 // Funcionalidad "Vista previa de media": en vez del texto feo que genera
@@ -2279,11 +2279,13 @@ export function ConversationList({
             </Link>
           </Button>
         )}
-        {/* Funcionalidad "Mis estadísticas": panel personal — mismo permiso
-            que Respuestas rápidas ('escribir': Administrador y Coordinadora,
-            QA no porque QA no responde chats). La pantalla también está
-            protegida server-side (ver src/app/mis-estadisticas/page.tsx). */}
-        {puedeSePuede(sessionPerfil, 'escribir') && (
+        {/* Funcionalidad "Mis estadísticas": panel personal exclusivo del rol
+            Coordinadora (ver esCoordinadora() en permissions.ts). Administrador
+            queda afuera a propósito: ya ve esos mismos números, incluidos los
+            suyos, dentro del dashboard general de Métricas. La pantalla
+            también está protegida server-side (ver
+            src/app/mis-estadisticas/page.tsx). */}
+        {esCoordinadora(sessionPerfil) && (
           <Button
             asChild
             variant="ghost"
