@@ -1838,14 +1838,16 @@ export function ConversationList({
       )}
 
       {/* Funcionalidad "Alerta de tiempo de respuesta" (banner + sonido):
-          envoltorio "relative" para que la pila de banners (posicionada
-          absoluta, ver ResponseAlertBannerStack) se apile arriba de la
-          lista de chats sin empujarla hacia abajo. El tamaño flex (antes en
-          el propio ScrollArea) se mueve a este div — el ScrollArea de
-          adentro ahora solo llena ese espacio (h-full). */}
-      <div className="relative min-h-0 flex-1">
+          envoltorio de columna flex para que la pila de banners ocupe su
+          PROPIO espacio arriba de la lista (empujándola hacia abajo al
+          aparecer, en vez de flotar encima y taparle la primera fila — ver
+          ResponseAlertBannerStack, que ya no usa position: absolute). El
+          tamaño flex (antes en el propio ScrollArea) se mueve a este div, y
+          el ScrollArea de adentro vuelve a repartirse el espacio restante
+          (h-0 flex-1) junto a la pila de banners. */}
+      <div className="flex min-h-0 flex-1 flex-col">
         <ResponseAlertBannerStack banners={alertBanners} onBannerDone={handleAlertBannerDone} />
-        <ScrollArea className="h-full overflow-hidden overscroll-contain">
+        <ScrollArea className="h-0 flex-1 overflow-hidden overscroll-contain">
         {isStarredPanelOpen ? (
           // Funcionalidad "Mensajes destacados": lista de todos los mensajes
           // con estrella, de cualquier chat, ordenados del más reciente al

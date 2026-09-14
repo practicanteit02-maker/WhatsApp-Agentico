@@ -45,15 +45,20 @@ type ResponseAlertBannerStackProps = {
  * es un aviso adicional. Cada banner es independiente: se queda fijo
  * mientras SU conversación siga en alerta, y desaparece solo cuando ESA
  * conversación puntual se responde (no cuando se responde cualquier otra).
- * Posicionado absoluto (ver el contenedor "relative" que lo envuelve en
- * conversation-list.tsx) para no empujar las filas de chats hacia abajo
- * mientras aparece/desaparece.
+ *
+ * A propósito NO usa position: absolute — vivía flotando encima de la
+ * lista, y como el chat en alerta suele ser el más reciente (primera fila),
+ * terminaba tapándolo por completo, impidiendo verlo o hacerle clic. Ahora
+ * ocupa su propio espacio en el flujo normal (ver el "grid-rows" que anima
+ * el alto de cada ResponseAlertBanner más abajo): al aparecer empuja la
+ * lista hacia abajo, al desaparecer la deja volver a subir — pero nunca
+ * queda superpuesto a ninguna fila.
  */
 export function ResponseAlertBannerStack({ banners, onBannerDone }: ResponseAlertBannerStackProps) {
   if (banners.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col gap-2 p-2">
+    <div className="flex flex-col gap-2 p-2">
       {banners.map((banner) => (
         <ResponseAlertBanner key={banner.threadKey} banner={banner} onDone={() => onBannerDone(banner.threadKey)} />
       ))}
@@ -69,8 +74,12 @@ type ResponseAlertBannerProps = {
 function ResponseAlertBanner({ banner, onDone }: ResponseAlertBannerProps) {
   // Arranca en el estado "oculto" (el mismo que el de salida) y pasa a
   // "entered" en el siguiente frame — ese cambio de clase entre ambos
-  // estados es lo que dispara la transición CSS de entrada (fade +
-  // deslizamiento sutil hacia abajo).
+  // estados es lo que dispara la transición CSS de entrada: el alto real
+  // del banner (0 → su alto natural, vía la técnica "grid-template-rows:
+  // 0fr → 1fr", lo único que anima alto sin tener que medirlo a mano) más un
+  // fade de opacidad. Animar el alto (no solo opacidad/transform) es lo que
+  // hace que empuje la lista de chats hacia abajo al aparecer, y la deje
+  // volver a subir al desaparecer, en vez de flotar encima tapando filas.
   const [entered, setEntered] = useState(false);
   // Evita que un re-render del padre (poll/tick, cada 10-30s) con
   // banner.active todavía en true vuelva a sonar — el sonido es por
@@ -113,21 +122,35 @@ function ResponseAlertBanner({ banner, onDone }: ResponseAlertBannerProps) {
   }, [banner.active]);
 
   return (
+    // Envoltorio "grid-rows": anima grid-template-rows entre "0fr" (alto 0,
+    // el contenido de adentro queda recortado por overflow-hidden) y "1fr"
+    // (su alto natural) — la técnica estándar para animar un alto que no se
+    // conoce de antemano (el texto de cada banner puede ocupar una o dos
+    // líneas según el nombre del contacto) sin tener que medirlo a mano con
+    // JS. El fade de opacidad vive en el div de adentro, para que ambas
+    // animaciones (alto + opacidad) corran juntas.
     <div
-      role="status"
-      className={cn(
-        'pointer-events-auto flex items-start gap-2.5 rounded-xl border border-destructive/30',
-        'bg-[var(--chat-surface)] px-3 py-2.5 shadow-lg transition-all ease-out',
-        entered ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0',
-      )}
+      className={cn('grid transition-[grid-template-rows] ease-out', entered ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}
       style={{ transitionDuration: `${ENTER_DURATION_MS}ms` }}
     >
-      <Clock className="mt-0.5 size-4 shrink-0 text-destructive" />
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-destructive">
-          {banner.contactName} lleva más de 15 min sin respuesta
-        </p>
-        {banner.zona && <p className="text-xs text-muted-foreground">{banner.zona}</p>}
+      <div className="overflow-hidden">
+        <div
+          role="status"
+          className={cn(
+            'flex items-start gap-2.5 rounded-xl border border-destructive/30',
+            'bg-[var(--chat-surface)] px-3 py-2.5 shadow-lg transition-opacity ease-out',
+            entered ? 'opacity-100' : 'opacity-0',
+          )}
+          style={{ transitionDuration: `${ENTER_DURATION_MS}ms` }}
+        >
+          <Clock className="mt-0.5 size-4 shrink-0 text-destructive" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-destructive">
+              {banner.contactName} lleva más de 15 min sin respuesta
+            </p>
+            {banner.zona && <p className="text-xs text-muted-foreground">{banner.zona}</p>}
+          </div>
+        </div>
       </div>
     </div>
   );
