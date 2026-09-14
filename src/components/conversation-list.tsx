@@ -1128,10 +1128,14 @@ export function ConversationList({
   /** Funcionalidad "Alerta de tiempo de respuesta" (banner + sonido): mismo
    * patrón de diffing "snapshot anterior vs actual" que los dos efectos de
    * arriba, pero sobre el CONJUNTO de threadKeys que están en alerta ahora
-   * mismo (ver isThreadInAlert) en vez de un snapshot por-thread — un chat
-   * dispara el banner+sonido una sola vez, en el instante en que ENTRA al
-   * conjunto (false→true), nunca mientras se queda adentro (evita repetirlo
-   * en cada re-render mientras el chat sigue sin respuesta).
+   * mismo (ver isThreadInAlert) en vez de un snapshot por-thread. A
+   * diferencia de una notificación puntual, acá el banner de cada chat debe
+   * quedarse fijo TODO el tiempo que ese chat siga en alerta — así que este
+   * efecto no solo agrega un banner nuevo por cada threadKey que ENTRA al
+   * conjunto (false→true), también apaga (banner.active = false, dispara su
+   * animación de salida en ResponseAlertBanner) el de cualquiera que SALGA
+   * del conjunto (alguien le respondió a ese cliente). El sonido en sí solo
+   * suena una vez por banner nuevo (ver ResponseAlertBanner), no acá.
    *
    * Corre tanto en cada tick de 30s (alertNowTick) como en cada refetch de
    * la lista (threads cambia, cada 10s) — cualquiera de los dos puede ser el
@@ -1156,26 +1160,53 @@ export function ConversationList({
       return;
     }
 
-    const newlyAlertedThreads = threads.filter(
-      (thread) => currentAlertKeys.has(thread.key) && !previousAlertThreadKeysRef.current.has(thread.key),
-    );
-
+    const previousAlertKeys = previousAlertThreadKeysRef.current;
     previousAlertThreadKeysRef.current = currentAlertKeys;
 
-    if (newlyAlertedThreads.length === 0) return;
+    // Nada entró ni salió del conjunto desde el tick/poll anterior — los
+    // banners que ya existen (si hay) tienen el "active" correcto desde la
+    // última vez que sí cambió algo, así que no hace falta tocar el estado.
+    const alertKeysChanged =
+      currentAlertKeys.size !== previousAlertKeys.size ||
+      [...currentAlertKeys].some((key) => !previousAlertKeys.has(key));
+    if (!alertKeysChanged) return;
 
-    setAlertBanners((prev) => [
-      ...prev,
-      ...newlyAlertedThreads.map((thread) => ({
-        id: `${thread.key}-${now}`,
-        contactName: thread.contactName || thread.phoneNumber || 'Unknown phone number',
-        zona: zoneMap[thread.key],
-      })),
-    ]);
+    setAlertBanners((prev) => {
+      const existingThreadKeys = new Set(prev.map((banner) => banner.threadKey));
+
+      // Los banners que ya existían actualizan su "active" según si su
+      // threadKey sigue en el conjunto ahora mismo — el que pasa a false acá
+      // es el que dispara la animación de salida (ver el efecto en
+      // ResponseAlertBanner).
+      const updated = prev.map((banner) => ({
+        ...banner,
+        active: currentAlertKeys.has(banner.threadKey),
+      }));
+
+      // Un banner nuevo por cada threadKey que entró recién al conjunto (no
+      // estaba en el anterior) y que todavía no tiene uno en el arreglo —
+      // esto último es solo defensivo, por si un chat volviera a alertar
+      // mientras su banner previo sigue en medio de la animación de salida.
+      const newBanners = threads
+        .filter(
+          (thread) =>
+            currentAlertKeys.has(thread.key) &&
+            !previousAlertKeys.has(thread.key) &&
+            !existingThreadKeys.has(thread.key),
+        )
+        .map((thread) => ({
+          threadKey: thread.key,
+          contactName: thread.contactName || thread.phoneNumber || 'Unknown phone number',
+          zona: zoneMap[thread.key],
+          active: true,
+        }));
+
+      return [...updated, ...newBanners];
+    });
   }, [threads, archivedThreadKeys, alertNowTick, zoneMap]);
 
-  const handleAlertBannerDone = (id: string) => {
-    setAlertBanners((prev) => prev.filter((banner) => banner.id !== id));
+  const handleAlertBannerDone = (threadKey: string) => {
+    setAlertBanners((prev) => prev.filter((banner) => banner.threadKey !== threadKey));
   };
 
   useEffect(() => {

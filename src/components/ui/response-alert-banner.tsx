@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { playResponseAlertSound } from '@/lib/notification-sounds';
@@ -12,30 +12,42 @@ import { playResponseAlertSound } from '@/lib/notification-sounds';
 // se encarga de la animación y de avisarle al padre cuándo un banner terminó
 // su ciclo completo, para que lo saque del arreglo.
 export type ResponseAlertBannerItem = {
-  /** Único por aparición (no por chat): el mismo threadKey puede volver a
-   * entrar en alerta más adelante y dispara un banner nuevo con un id nuevo. */
-  id: string;
+  /** threadKey del chat — un banner por CONVERSACIÓN en alerta, no por
+   * aparición: mientras el chat siga en alerta, es el mismo banner (fijo, no
+   * se re-anima ni vuelve a sonar); si vuelve a alertar más adelante (ya
+   * respondido y sin respuesta de nuevo por otros 15min), ahí sí es una
+   * instancia nueva. */
+  threadKey: string;
   contactName: string;
   zona?: string;
+  /** true mientras isThreadInAlert() siga dando true para este threadKey
+   * (ver el efecto en conversation-list.tsx que arma este arreglo) — en
+   * cuanto pasa a false (alguien del equipo le respondió al cliente), este
+   * banner dispara su animación de salida y avisa a onDone() para que lo
+   * saquen del arreglo. Mientras siga en true, el banner se queda fijo en
+   * pantalla, sin ningún timer de auto-ocultado. */
+  active: boolean;
 };
 
 const ENTER_DURATION_MS = 200;
-const VISIBLE_DURATION_MS = 3000;
 const EXIT_DURATION_MS = 200;
 
 type ResponseAlertBannerStackProps = {
   banners: ResponseAlertBannerItem[];
-  onBannerDone: (id: string) => void;
+  onBannerDone: (threadKey: string) => void;
 };
 
 /**
  * Pila de banners rojos que se apila arriba de la lista de conversaciones,
- * uno por cada chat que ACABA de cruzar el umbral de 15 minutos sin
- * respuesta — no reemplaza el contador de la pestaña "En alerta" ni el borde
- * rojo de cada fila (esos siguen viviendo en conversation-list.tsx tal cual
- * estaban), es un aviso adicional y transitorio. Posicionado absoluto (ver el
- * contenedor "relative" que lo envuelve en conversation-list.tsx) para no
- * empujar las filas de chats hacia abajo mientras aparece/desaparece.
+ * uno por cada chat que está en alerta (más de 15 minutos sin respuesta) —
+ * no reemplaza el contador de la pestaña "En alerta" ni el borde rojo de
+ * cada fila (esos siguen viviendo en conversation-list.tsx tal cual estaban),
+ * es un aviso adicional. Cada banner es independiente: se queda fijo
+ * mientras SU conversación siga en alerta, y desaparece solo cuando ESA
+ * conversación puntual se responde (no cuando se responde cualquier otra).
+ * Posicionado absoluto (ver el contenedor "relative" que lo envuelve en
+ * conversation-list.tsx) para no empujar las filas de chats hacia abajo
+ * mientras aparece/desaparece.
  */
 export function ResponseAlertBannerStack({ banners, onBannerDone }: ResponseAlertBannerStackProps) {
   if (banners.length === 0) return null;
@@ -43,7 +55,7 @@ export function ResponseAlertBannerStack({ banners, onBannerDone }: ResponseAler
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col gap-2 p-2">
       {banners.map((banner) => (
-        <ResponseAlertBanner key={banner.id} banner={banner} onDone={() => onBannerDone(banner.id)} />
+        <ResponseAlertBanner key={banner.threadKey} banner={banner} onDone={() => onBannerDone(banner.threadKey)} />
       ))}
     </div>
   );
@@ -58,27 +70,47 @@ function ResponseAlertBanner({ banner, onDone }: ResponseAlertBannerProps) {
   // Arranca en el estado "oculto" (el mismo que el de salida) y pasa a
   // "entered" en el siguiente frame — ese cambio de clase entre ambos
   // estados es lo que dispara la transición CSS de entrada (fade +
-  // deslizamiento sutil hacia abajo). El resto del ciclo (quedarse visible
-  // ~3s, volver a "oculto" para la salida, avisar a onDone) lo maneja el
-  // efecto de abajo con setTimeout — cada banner es una instancia fija por
-  // `id` (la key del .map en ResponseAlertBannerStack), así que el efecto
-  // corre una sola vez, en su montaje.
+  // deslizamiento sutil hacia abajo).
   const [entered, setEntered] = useState(false);
+  // Evita que un re-render del padre (poll/tick, cada 10-30s) con
+  // banner.active todavía en true vuelva a sonar — el sonido es por
+  // instancia de banner (una sola vez, al entrar en alerta), no por render.
+  const hasPlayedSoundRef = useRef(false);
 
+  // Entrada: siempre se monta con active=true (conversation-list.tsx solo
+  // agrega un banner nuevo al arreglo cuando el chat ENTRA en alerta) — este
+  // efecto corre una sola vez, en el montaje: suena el ding-dong y dispara la
+  // animación de entrada.
   useEffect(() => {
-    playResponseAlertSound();
+    if (!hasPlayedSoundRef.current) {
+      playResponseAlertSound();
+      hasPlayedSoundRef.current = true;
+    }
 
     const enterFrame = requestAnimationFrame(() => setEntered(true));
-    const exitTimer = setTimeout(() => setEntered(false), ENTER_DURATION_MS + VISIBLE_DURATION_MS);
-    const doneTimer = setTimeout(onDone, ENTER_DURATION_MS + VISIBLE_DURATION_MS + EXIT_DURATION_MS);
-
-    return () => {
-      cancelAnimationFrame(enterFrame);
-      clearTimeout(exitTimer);
-      clearTimeout(doneTimer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => cancelAnimationFrame(enterFrame);
   }, []);
+
+  // Salida: en cuanto ESTE threadKey deja de estar en alerta (banner.active
+  // pasa a false — alguien le respondió a ese cliente puntual), se dispara
+  // la animación de salida y, ya terminada, se avisa a onDone() para que
+  // conversation-list.tsx lo saque del arreglo. Mientras active se mantenga
+  // true, el efecto no hace nada — ya no hay ningún timer de auto-ocultado,
+  // el banner se queda fijo el tiempo que haga falta.
+  //
+  // Depende solo de banner.active (no de onDone) a propósito: onDone es una
+  // función nueva en cada render del padre (arrow function inline en
+  // ResponseAlertBannerStack), pero siempre hace lo mismo — si se agregara
+  // a las dependencias, cada re-render del padre mientras active sigue en
+  // false reiniciaría el timer de salida en vez de dejarlo correr.
+  useEffect(() => {
+    if (banner.active) return;
+
+    setEntered(false);
+    const doneTimer = setTimeout(onDone, EXIT_DURATION_MS);
+    return () => clearTimeout(doneTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [banner.active]);
 
   return (
     <div
