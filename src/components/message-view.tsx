@@ -245,18 +245,26 @@ const MESSAGE_SKELETON_WIDTHS = [280, 180, 320, 210, 260, 170];
 // El check doble ("delivered") de un mensaje saliente depende de que a este
 // chat le llegue, o el aviso del webhook por SSE (ver useInboxLiveUpdates más
 // abajo), o el sondeo normal de este hook — y el sondeo normal, a propósito,
-// es lento (8s, ver el comentario junto a refetchInterval) para no competir
-// con los envíos por el presupuesto limitado de conexiones del navegador. Si
+// es más lento que el de la ventana rápida (3s, ver el comentario junto a
+// refetchInterval — bajado de 8s a pedido, ya que esto solo sondea el chat
+// abierto, no compite con el resto de la app) para no competir con los
+// envíos por el presupuesto limitado de conexiones del navegador. Si
 // el webhook no llega (p. ej. el túnel de cloudflared caído — ver el
 // comentario grande en src/app/api/webhooks/whatsapp/route.ts), el único
-// camino que queda es ese sondeo lento, y el check doble tarda hasta 8s en
+// camino que queda es ese sondeo, y el check doble tarda hasta 3s en
 // aparecer en vez de casi al instante. Mientras haya un mensaje saliente
 // reciente todavía en "sent" (un solo check, sin confirmar entrega/lectura
 // aún), se sondea mucho más seguido — así el check doble no depende de que
 // el webhook esté funcionando.
 const OUTBOUND_STATUS_FAST_POLL_INTERVAL_MS = 2_000;
 const OUTBOUND_STATUS_FAST_POLL_WINDOW_MS = 30_000;
-const OUTBOUND_STATUS_NORMAL_POLL_INTERVAL_MS = 8_000;
+// Bajado de 8s a 3s (a pedido, para que recibir mensajes del cliente se
+// sienta más responsivo) — sigue acotado solo al chat que está abierto
+// ahora mismo (este useQuery vive en MessageView, que nunca tiene más de
+// una instancia montada a la vez), así que no repite el problema original
+// de sondear MUCHOS chats a la vez que justificó bajar esto a 8s — acá solo
+// se intensifica el sondeo de UN chat mientras alguien lo está mirando.
+const OUTBOUND_STATUS_NORMAL_POLL_INTERVAL_MS = 3_000;
 // Funcionalidad "Reaccionar a un mensaje": emojis rápidos que ofrece el
 // selector que abre el botón de carita junto a Responder/Estrella en cada
 // burbuja (ver el botón "React" y handleSendReaction más abajo).
@@ -961,7 +969,7 @@ export function MessageView({
     },
     // Sin `refetchIntervalInBackground`: con la pestaña en segundo plano no
     // hay nadie mirando este chat, así que no tiene sentido sondear sus
-    // mensajes cada 8 s. Al volver el foco, `refetchOnWindowFocus` (global)
+    // mensajes cada 3 s. Al volver el foco, `refetchOnWindowFocus` (global)
     // lo pone al día.
     refetchOnMount: false,
   });
@@ -1457,6 +1465,11 @@ export function MessageView({
       optimisticMessageId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const optimisticMessage: Message = {
         id: optimisticMessageId,
+        // Funcionalidad "Burbuja optimista sin parpadeo": ver el comentario
+        // junto a Message['clientId'] en inbox-data.ts — se usa como `key`
+        // de React en vez de `id`, para que la burbuja no se desmonte/vuelva
+        // a montar cuando `id` pase de este valor temporal al real.
+        clientId: optimisticMessageId,
         conversationId: targetConversationId,
         phoneNumberId,
         direction: "outbound",
@@ -1943,7 +1956,15 @@ export function MessageView({
 
               return (
                 <div
-                  key={message.id}
+                  // Funcionalidad "Burbuja optimista sin parpadeo": clientId
+                  // (si existe) en vez de id — ver el comentario junto a
+                  // Message['clientId'] en inbox-data.ts. Usar `id` acá
+                  // directamente hacía que React desmontara y volviera a
+                  // montar esta burbuja en el momento exacto en que se
+                  // confirma el envío (id pasa de "optimistic-..." al id
+                  // real), que es lo que se veía como el mensaje
+                  // desapareciendo y reapareciendo.
+                  key={message.clientId ?? message.id}
                   data-message-id={message.id}
                   data-conversation-id={message.conversationId}
                 >

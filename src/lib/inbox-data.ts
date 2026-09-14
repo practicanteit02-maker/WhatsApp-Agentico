@@ -71,6 +71,18 @@ export type Message = {
     mediaId?: string;
     caption?: string;
   };
+  /** Funcionalidad "Burbuja optimista sin parpadeo": id local estable,
+   * asignado solo a un mensaje de texto recién enviado (ver
+   * handleSendMessage en message-view.tsx), que se mantiene igual cuando
+   * `id` pasa de ser el id optimista temporal (`optimistic-...`) al id real
+   * que confirma el servidor. React usa esto como `key` en vez de `id` para
+   * esa burbuja puntual — si se usara `id` directo, el cambio de valor en
+   * el momento de la confirmación hace que React trate la burbuja como un
+   * elemento nuevo (desmonta la vieja, monta una), lo que se ve como un
+   * parpadeo aunque el mensaje nunca haya dejado de estar en la lista. Un
+   * mensaje que vino del servidor (nunca fue optimista) no tiene este
+   * campo. */
+  clientId?: string;
 };
 
 export type ConversationThread = {
