@@ -33,6 +33,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ResponseAlertBannerStack, type ResponseAlertBannerItem } from '@/components/ui/response-alert-banner';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { NewChatDialog } from '@/components/new-chat-dialog';
 import { type StarredMessage } from '@/lib/starred-messages';
@@ -411,6 +412,13 @@ export function ConversationList({
   // del sistema, que ahí sería redundante).
   const previousSoundSnapshotsRef = useRef<Map<string, ThreadNotificationSnapshot>>(new Map());
   const hasInitializedSoundSnapshotsRef = useRef(false);
+  // Funcionalidad "Alerta de tiempo de respuesta" (banner + sonido): mismo
+  // patrón de snapshot-anterior-vs-actual que las dos referencias de arriba,
+  // pero sobre el CONJUNTO de threadKeys en alerta (ver isThreadInAlert) en
+  // vez de un snapshot por-thread. Ver el efecto que las usa, más abajo.
+  const previousAlertThreadKeysRef = useRef<Set<string>>(new Set());
+  const hasInitializedAlertThreadKeysRef = useRef(false);
+  const [alertBanners, setAlertBanners] = useState<ResponseAlertBannerItem[]>([]);
 
   useEffect(() => {
     setArchivedThreadKeys(loadStoredStringSet(ARCHIVED_THREADS_STORAGE_KEY));
@@ -1117,6 +1125,59 @@ export function ConversationList({
     }
   }, [threads]);
 
+  /** Funcionalidad "Alerta de tiempo de respuesta" (banner + sonido): mismo
+   * patrón de diffing "snapshot anterior vs actual" que los dos efectos de
+   * arriba, pero sobre el CONJUNTO de threadKeys que están en alerta ahora
+   * mismo (ver isThreadInAlert) en vez de un snapshot por-thread — un chat
+   * dispara el banner+sonido una sola vez, en el instante en que ENTRA al
+   * conjunto (false→true), nunca mientras se queda adentro (evita repetirlo
+   * en cada re-render mientras el chat sigue sin respuesta).
+   *
+   * Corre tanto en cada tick de 30s (alertNowTick) como en cada refetch de
+   * la lista (threads cambia, cada 10s) — cualquiera de los dos puede ser el
+   * que note la transición primero. No filtra por la zona activa
+   * (activeZone) a propósito, igual que las notificaciones de escritorio de
+   * arriba: un chat en alerta de otra zona debe seguir avisando.
+   *
+   * No se avisa de chats que YA estaban en alerta al cargar la página (ver
+   * hasInitializedAlertThreadKeysRef) — solo de los que cruzan el umbral de
+   * ahí en adelante, mismo criterio que hasInitializedNotificationSnapshotsRef. */
+  useEffect(() => {
+    const now = Date.now();
+    const currentAlertKeys = new Set(
+      threads
+        .filter((thread) => !archivedThreadKeys.has(thread.key) && isThreadInAlert(thread, now))
+        .map((thread) => thread.key),
+    );
+
+    if (!hasInitializedAlertThreadKeysRef.current) {
+      previousAlertThreadKeysRef.current = currentAlertKeys;
+      hasInitializedAlertThreadKeysRef.current = true;
+      return;
+    }
+
+    const newlyAlertedThreads = threads.filter(
+      (thread) => currentAlertKeys.has(thread.key) && !previousAlertThreadKeysRef.current.has(thread.key),
+    );
+
+    previousAlertThreadKeysRef.current = currentAlertKeys;
+
+    if (newlyAlertedThreads.length === 0) return;
+
+    setAlertBanners((prev) => [
+      ...prev,
+      ...newlyAlertedThreads.map((thread) => ({
+        id: `${thread.key}-${now}`,
+        contactName: thread.contactName || thread.phoneNumber || 'Unknown phone number',
+        zona: zoneMap[thread.key],
+      })),
+    ]);
+  }, [threads, archivedThreadKeys, alertNowTick, zoneMap]);
+
+  const handleAlertBannerDone = (id: string) => {
+    setAlertBanners((prev) => prev.filter((banner) => banner.id !== id));
+  };
+
   useEffect(() => {
     if (!openRowMenuKey) return;
 
@@ -1745,7 +1806,15 @@ export function ConversationList({
         </div>
       )}
 
-      <ScrollArea className="h-0 flex-1 overflow-hidden overscroll-contain">
+      {/* Funcionalidad "Alerta de tiempo de respuesta" (banner + sonido):
+          envoltorio "relative" para que la pila de banners (posicionada
+          absoluta, ver ResponseAlertBannerStack) se apile arriba de la
+          lista de chats sin empujarla hacia abajo. El tamaño flex (antes en
+          el propio ScrollArea) se mueve a este div — el ScrollArea de
+          adentro ahora solo llena ese espacio (h-full). */}
+      <div className="relative min-h-0 flex-1">
+        <ResponseAlertBannerStack banners={alertBanners} onBannerDone={handleAlertBannerDone} />
+        <ScrollArea className="h-full overflow-hidden overscroll-contain">
         {isStarredPanelOpen ? (
           // Funcionalidad "Mensajes destacados": lista de todos los mensajes
           // con estrella, de cualquier chat, ordenados del más reciente al
@@ -2273,7 +2342,8 @@ export function ConversationList({
             })}
           </div>
         )}
-      </ScrollArea>
+        </ScrollArea>
+      </div>
 
       {/* Íconos fijos abajo a la izquierda — antes vivían arriba a la derecha
           (ajustes, apariencia, notificaciones, refrescar); el usuario pidió
