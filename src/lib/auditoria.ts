@@ -137,8 +137,22 @@ export type FiltrosAuditoria = {
   actor?: string;
   perfil?: string;
   acciones?: string[];
-  limit: number;
+  /** Requerido salvo con `sinLimite: true` (ver más abajo), donde se ignora
+   * por completo. */
+  limit?: number;
   cursor?: string;
+  /** Funcionalidad "Exportar CSV" (ver /api/auditoria?exportar=true y el
+   * botón de auditoria-view.tsx): en vez de paginar de a `limit` con cursor,
+   * trae TODO el rango filtrado de una sola vez — para que el CSV exportado
+   * nunca sea un subconjunto incompleto por no haber apretado "cargar más"
+   * hasta el final. Reusa exactamente la misma iteración día-por-día y el
+   * mismo FilterExpression que el modo paginado (ver listarAuditoria); la
+   * única diferencia real es que no corta en `limit` ni arma un cursor de
+   * continuación — corta recién en EXPORT_SAFETY_LIMIT, un tope de
+   * seguridad que en un uso normal de auditoría no debería alcanzarse
+   * nunca, ahí solo para no arriesgar la memoria/el tiempo de la función
+   * ante un rango de fechas absurdo. */
+  sinLimite?: boolean;
 };
 
 export type ResultadoAuditoria = {
@@ -198,10 +212,13 @@ function mapearItem(item: Record<string, unknown>): RegistroAuditoria {
 
 /**
  * Lista registros de auditoría del rango de fechas dado, del más reciente al
- * más antiguo, con filtros opcionales y paginación por cursor. Cada día del
- * rango es una Query a su propia partición; el filtro por persona/rol/acción
- * se aplica como FilterExpression. Trae `limit + 1` para saber si hay más y,
- * si los hay, devuelve como cursor la clave del último registro incluido.
+ * más antiguo, con filtros opcionales y paginación por cursor (o, con
+ * `filtros.sinLimite`, sin paginar en absoluto — ver ese campo en
+ * FiltrosAuditoria, es el modo que usa "Exportar CSV"). Cada día del rango
+ * es una Query a su propia partición; el filtro por persona/rol/acción se
+ * aplica como FilterExpression. En el modo paginado, trae `limit + 1` para
+ * saber si hay más y, si los hay, devuelve como cursor la clave del último
+ * registro incluido.
  *
  * DynamoDB rechaza con ValidationException cualquier clave de
  * ExpressionAttributeNames que no se use en alguna expresión, así que los
@@ -212,9 +229,18 @@ function mapearItem(item: Record<string, unknown>): RegistroAuditoria {
  * inválida) se propaga como una excepción con contexto en vez de dejar que
  * el handler devuelva un 500 con cuerpo vacío.
  */
+// Tope de seguridad del modo `sinLimite` (export) — ver el comentario de ese
+// campo en FiltrosAuditoria. No es un límite funcional, es un freno de mano.
+const EXPORT_SAFETY_LIMIT = 50_000;
+
 export async function listarAuditoria(filtros: FiltrosAuditoria): Promise<ResultadoAuditoria> {
-  const { desde, hasta, actor, perfil, acciones, limit } = filtros;
-  const cursor = decodificarCursor(filtros.cursor);
+  const { desde, hasta, actor, perfil, acciones, sinLimite } = filtros;
+  // En modo `sinLimite` se ignora cualquier cursor recibido (no tendría
+  // sentido continuar una paginación que ya no existe) y se usa el tope de
+  // seguridad en vez del `limit` normal, que acá ni hace falta que venga.
+  const limit = filtros.limit ?? 50;
+  const cursor = sinLimite ? undefined : decodificarCursor(filtros.cursor);
+  const tope = sinLimite ? EXPORT_SAFETY_LIMIT : limit;
 
   // Nombres/valores del FILTRO: constantes para todas las Query del rango, y
   // solo se incluyen si su filtro está activo (si no, quedarían sin usar).
@@ -289,13 +315,27 @@ export async function listarAuditoria(filtros: FiltrosAuditoria): Promise<Result
           registros.push(mapearItem(item as Record<string, unknown>));
         }
         exclusiveStartKey = salida.LastEvaluatedKey as Record<string, unknown> | undefined;
-      } while (exclusiveStartKey && registros.length <= limit);
+      } while (exclusiveStartKey && registros.length <= tope);
 
-      if (registros.length > limit) break;
+      if (registros.length > tope) break;
     }
   } catch (error) {
     console.error('No se pudo consultar "auditoria-panel" en DynamoDB:', error);
     throw new Error('No se pudo consultar el historial de auditoría en DynamoDB');
+  }
+
+  if (sinLimite) {
+    // Nunca arma un cursor de continuación: es "todo el rango o nada". Si
+    // llegó a tocar el tope de seguridad, se corta ahí y queda registrado en
+    // el log — no debería pasar en un uso normal de auditoría, así que si
+    // pasa vale la pena mirarlo (¿rango de fechas gigante por error?).
+    if (registros.length > tope) {
+      console.error(
+        `listarAuditoria: el export alcanzó el tope de seguridad de ${EXPORT_SAFETY_LIMIT} filas para el rango ${desde}..${hasta} — el CSV va a salir incompleto.`
+      );
+      registros.length = tope;
+    }
+    return { registros, nextCursor: null };
   }
 
   if (registros.length > limit) {

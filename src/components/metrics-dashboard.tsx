@@ -4,11 +4,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { ExportButton } from '@/components/ui/export-button';
 import { MatrizActividad } from '@/components/matriz-actividad';
 import { getProfileStyle } from '@/lib/mock-profiles';
+import { descargarCSV, filasACSV, unirBloquesCSV } from '@/lib/csv-export';
 import type { AgregadoAuditoria } from '@/lib/auditoria';
 import type { MetricasChats } from '@/lib/metrics';
 import type { AgregadoRespuestas } from '@/lib/respuestas-metrics';
+
+// Mismo orden/nombres que DIAS_LARGO en matriz-actividad.tsx (0 = Lunes) —
+// ese archivo no los exporta, así que se repiten acá para el CSV.
+const DIAS_SEMANA_CSV = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
 type RespuestaMetricas = {
   chats: MetricasChats | null;
@@ -166,6 +172,107 @@ export function MetricsDashboard() {
     .sort((a, b) => (a.tiempoRespuestaPromedioSeg ?? 0) - (b.tiempoRespuestaPromedioSeg ?? 0));
   const maxTiempoRespuesta = Math.max(1, ...actoresConTiempo.map((a) => a.tiempoRespuestaPromedioSeg ?? 0));
 
+  /**
+   * Funcionalidad "Exportar CSV": arma un solo archivo con todas las
+   * secciones del dashboard (una tabla por sección, separadas por una fila
+   * en blanco — ver unirBloquesCSV) a partir de los datos que YA están en
+   * memoria (`data`, ya cargado por el fetch de arriba) — sin pedir nada
+   * nuevo al backend, a diferencia de auditoria-view.tsx (que sí necesita un
+   * fetch aparte por la paginación). Cada bloque arranca con su propio
+   * título en una línea, para que alguien sin conocimientos técnicos que
+   * abra el CSV en Excel entienda de un vistazo qué está mirando.
+   */
+  const handleExport = () => {
+    if (!data) return;
+
+    const bloques: string[] = [
+      'Resumen general\r\n' +
+        filasACSV(
+          [
+            { etiqueta: 'Chats totales', valor: chats?.total },
+            { etiqueta: `Acciones (${rango} días)`, valor: auditoria?.totalAcciones },
+            { etiqueta: 'Persona más activa', valor: coordinadorTop?.actor },
+            { etiqueta: 'Acciones de la persona más activa', valor: coordinadorTop?.total },
+            { etiqueta: 'Chats sin número asignado', valor: chats?.porZona['Sin asignar'] },
+            {
+              etiqueta: 'Tiempo de respuesta promedio del equipo',
+              valor:
+                respuestas?.tiempoRespuestaPromedioSeg != null
+                  ? formatearDuracion(respuestas.tiempoRespuestaPromedioSeg)
+                  : undefined,
+            },
+          ],
+          [
+            { encabezado: 'Métrica', valor: (f) => f.etiqueta },
+            { encabezado: 'Valor', valor: (f) => f.valor },
+          ],
+        ),
+    ];
+
+    if (chats) {
+      bloques.push(
+        'Chats por estado\r\n' +
+          filasACSV(Object.entries(chats.porEstado), [
+            { encabezado: 'Estado', valor: ([estado]) => estado },
+            { encabezado: 'Chats', valor: ([, valor]) => valor },
+          ]),
+      );
+      bloques.push(
+        'Chats por número\r\n' +
+          filasACSV(
+            Object.entries(chats.porZona).sort((a, b) => b[1] - a[1]),
+            [
+              { encabezado: 'Número/Zona', valor: ([zona]) => zona },
+              { encabezado: 'Chats', valor: ([, valor]) => valor },
+            ],
+          ),
+      );
+    }
+
+    if (auditoria) {
+      bloques.push(
+        `Acciones por persona (${rango} días)\r\n` +
+          filasACSV(auditoria.porActor, [
+            { encabezado: 'Persona', valor: (a) => a.actor },
+            { encabezado: 'Perfil', valor: (a) => a.perfil },
+            { encabezado: 'Acciones', valor: (a) => a.total },
+          ]),
+      );
+      bloques.push(
+        `Actividad por día (${rango} días)\r\n` +
+          filasACSV(auditoria.porDia, [
+            { encabezado: 'Día', valor: (d) => d.dia },
+            { encabezado: 'Acciones', valor: (d) => d.total },
+          ]),
+      );
+    }
+
+    if (actoresConTiempo.length > 0) {
+      bloques.push(
+        `Tiempo de respuesta por persona (${rango} días)\r\n` +
+          filasACSV(actoresConTiempo, [
+            { encabezado: 'Persona', valor: (a) => a.actor },
+            { encabezado: 'Perfil', valor: (a) => a.perfil },
+            { encabezado: 'Tiempo promedio', valor: (a) => formatearDuracion(a.tiempoRespuestaPromedioSeg ?? 0) },
+            { encabezado: 'Tiempo promedio (segundos)', valor: (a) => a.tiempoRespuestaPromedioSeg ?? undefined },
+          ]),
+      );
+    }
+
+    if (respuestas && respuestas.matrizActividad.length > 0) {
+      bloques.push(
+        `Actividad por hora y día (${rango} días)\r\n` +
+          filasACSV(respuestas.matrizActividad, [
+            { encabezado: 'Día', valor: (c) => DIAS_SEMANA_CSV[c.diaSemana] ?? c.diaSemana },
+            { encabezado: 'Hora', valor: (c) => `${String(c.hora).padStart(2, '0')}:00` },
+            { encabezado: 'Mensajes', valor: (c) => c.total },
+          ]),
+      );
+    }
+
+    descargarCSV(unirBloquesCSV(bloques), `metricas_${data.desde}_${data.hasta}.csv`);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -186,16 +293,19 @@ export function MetricsDashboard() {
             </button>
           ))}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => cargar(rango)}
-          disabled={loading}
-          className="h-9 rounded-md"
-        >
-          {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-          <span>Actualizar</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => cargar(rango)}
+            disabled={loading}
+            className="h-9 rounded-md"
+          >
+            {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+            <span>Actualizar</span>
+          </Button>
+          <ExportButton onExport={handleExport} disabled={!data} />
+        </div>
       </div>
 
       {error && (

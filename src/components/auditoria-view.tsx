@@ -5,7 +5,9 @@ import { Loader2, RefreshCw, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ExportButton } from '@/components/ui/export-button';
 import { Label } from '@/components/ui/label';
+import { descargarCSV, generarCSV } from '@/lib/csv-export';
 import {
   fetchConversations,
   groupConversationsByPhoneNumber,
@@ -238,6 +240,44 @@ export function AuditoriaView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Funcionalidad "Exportar CSV": a diferencia de metrics-dashboard.tsx, acá
+   * SÍ hace falta un fetch aparte — `registros` (el estado de la tabla) solo
+   * tiene lo que se cargó de a páginas con "Cargar más", nunca todo el rango
+   * filtrado si no se llegó a apretar ese botón hasta el final. Este fetch
+   * usa exactamente los mismos filtros que la tabla (construirParams, sin
+   * cursor) más `exportar=true`, que le dice al backend que ignore
+   * limit/cursor y traiga TODO el rango filtrado de una sola vez (ver
+   * FiltrosAuditoria.sinLimite en src/lib/auditoria.ts) — así el CSV nunca
+   * es un subconjunto incompleto de lo que está filtrado en pantalla.
+   */
+  const handleExport = async () => {
+    try {
+      const params = construirParams();
+      params.set('exportar', 'true');
+      const response = await fetch(`/api/auditoria?${params.toString()}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No se pudo exportar el historial');
+
+      const registrosExport = (data.registros || []) as RegistroAuditoria[];
+      const csv = generarCSV(registrosExport, [
+        { encabezado: 'Fecha y hora', valor: (r) => formatearFecha(r.fecha) },
+        { encabezado: 'Persona', valor: (r) => r.actor },
+        { encabezado: 'Rol', valor: (r) => r.actorPerfil },
+        { encabezado: 'Acción', valor: (r) => accionLabel(r.accion) },
+        { encabezado: 'Tipo de objeto', valor: (r) => OBJETO_LABEL[r.objetoTipo] ?? r.objetoTipo },
+        { encabezado: 'Objeto', valor: (r) => etiquetaObjeto(r, nombrePorThreadKey).texto },
+        { encabezado: 'Valor anterior', valor: (r) => r.valorAnterior ?? '' },
+        { encabezado: 'Valor nuevo', valor: (r) => r.valorNuevo ?? '' },
+        { encabezado: 'Detalle', valor: (r) => r.detalle ?? '' },
+      ]);
+
+      descargarCSV(csv, `auditoria_${desde}_${hasta}.csv`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo exportar el historial');
+    }
+  };
+
   const toggleAccion = (accion: string) => {
     setAccionesSel((prev) =>
       prev.includes(accion) ? prev.filter((a) => a !== accion) : [...prev, accion],
@@ -355,6 +395,7 @@ export function AuditoriaView() {
             <RotateCcw className="size-4" />
             <span>Limpiar</span>
           </Button>
+          <ExportButton onExport={handleExport} disabled={loading} className="ml-auto" />
         </div>
       </div>
 

@@ -18,6 +18,11 @@ import { esAdministrador } from '@/lib/permissions';
  *   - accion        : tipo de acción; se puede repetir para varios.
  *   - limit         : tamaño de página (1-200, default 50).
  *   - cursor        : cursor opaco de la página anterior.
+ *   - exportar      : "true" → funcionalidad "Exportar CSV" (ver
+ *                     auditoria-view.tsx): ignora `limit`/`cursor` y trae
+ *                     TODO el rango filtrado de una sola vez (ver
+ *                     FiltrosAuditoria.sinLimite en src/lib/auditoria.ts),
+ *                     para que el CSV nunca sea un subconjunto incompleto.
  */
 export async function GET(request: Request) {
   const session = await auth();
@@ -44,6 +49,7 @@ export async function GET(request: Request) {
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), 200) : 50;
 
   const cursor = searchParams.get('cursor')?.trim() || undefined;
+  const exportar = searchParams.get('exportar') === 'true';
 
   try {
     const resultado = await listarAuditoria({
@@ -54,6 +60,7 @@ export async function GET(request: Request) {
       acciones: acciones.length > 0 ? acciones : undefined,
       limit,
       cursor,
+      sinLimite: exportar,
     });
 
     return NextResponse.json({ ...resultado, desde, hasta });
