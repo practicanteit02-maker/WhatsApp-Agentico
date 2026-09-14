@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sendAutoReply } from '@/lib/auto-reply';
 import { checkZoneAccess } from '@/lib/conversation-zones';
-import { getAiEnabled } from '@/lib/chat-ai-config';
+import { acquireAiReplyLock, getAiEnabled, releaseAiReplyLock } from '@/lib/chat-ai-config';
 import { threadKeyFor } from '@/lib/inbox-data';
 import { requierePermiso } from '@/lib/require-permission';
 
@@ -59,13 +59,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ sent: false, reason: 'ai-disabled' });
     }
 
-    // messageId permite compartir el registro anti-duplicados del webhook
-    // (ver src/lib/auto-reply.ts) para que abrir el chat justo cuando la
-    // respuesta del webhook sigue en vuelo no produzca dos respuestas.
-    // conversationId permite empujar la respuesta directo a este chat vía
-    // SSE en vez de esperar a que el webhook de estado de Kapso vuelva a
-    // llegarnos.
-    await sendAutoReply(phoneNumberId, to, incomingText, messageId, conversationId);
+    // Corrección de "Gemini y Groq responden el mismo mensaje por separado":
+    // el webhook de Kapso le pega directo a whatsapp-agente-lambda (Gemini)
+    // en cada mensaje entrante, sin pasar por este panel — así que ese
+    // camino puede estar respondiendo este mismo threadKey justo cuando un
+    // agente abre el chat acá. Si no conseguimos el lock, abortamos ANTES de
+    // llamar a Groq (ver acquireAiReplyLock en chat-ai-config.ts para el
+    // diseño completo, compartido con index.mjs del otro repo).
+    if (!(await acquireAiReplyLock(threadKey))) {
+      return NextResponse.json({ sent: false, reason: 'locked' });
+    }
+
+    try {
+      // messageId permite compartir el registro anti-duplicados interno de
+      // este repo (ver src/lib/auto-reply.ts), por si este mismo endpoint se
+      // llega a llamar dos veces para el mismo mensaje. conversationId
+      // permite empujar la respuesta directo a este chat vía SSE en vez de
+      // esperar a que el webhook de estado de Kapso vuelva a llegarnos.
+      await sendAutoReply(phoneNumberId, to, incomingText, messageId, conversationId);
+    } finally {
+      // Se libera tanto si se respondió bien como si sendAutoReply falló —
+      // para no dejar el threadKey bloqueado 30s de más ante una falla real.
+      await releaseAiReplyLock(threadKey);
+    }
 
     return NextResponse.json({ sent: true });
   } catch (error) {
