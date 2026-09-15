@@ -29,10 +29,12 @@ async function requireAdministrador() {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function validateBody(body: { correo?: string; perfil?: string; zona?: string } | null) {
+function validateBody(body: { correo?: string; perfil?: string; zonas?: unknown } | null) {
   const correo = body?.correo?.trim().toLowerCase();
   const perfil = body?.perfil?.trim();
-  const zona = body?.zona?.trim() ?? '';
+  const zonas = Array.isArray(body?.zonas)
+    ? body.zonas.filter((z): z is string => typeof z === 'string' && z.trim().length > 0).map((z) => z.trim())
+    : [];
 
   if (!correo || !EMAIL_PATTERN.test(correo)) {
     return { error: 'Correo inválido' };
@@ -46,11 +48,19 @@ function validateBody(body: { correo?: string; perfil?: string; zona?: string } 
   if (!perfil || !esRolValido(perfil)) {
     return { error: `Perfil inválido: ${perfil}` };
   }
-  if (zona && !isAssignableZone(zona)) {
-    return { error: `Número inválido: ${zona}` };
+  // Funcionalidad "Números/Zonas múltiples": al menos una zona es
+  // obligatoria ahora (antes "zona" vacía era válida, un usuario sin zona
+  // asignada) — el paso 1 de esta funcionalidad decidió que el CRUD exige
+  // como mínimo una.
+  if (zonas.length === 0) {
+    return { error: 'Tenés que asignar al menos un número' };
+  }
+  const zonaInvalida = zonas.find((z) => !isAssignableZone(z));
+  if (zonaInvalida) {
+    return { error: `Número inválido: ${zonaInvalida}` };
   }
 
-  return { correo, perfil, zona };
+  return { correo, perfil, zonas };
 }
 
 export async function GET() {
@@ -65,7 +75,7 @@ export async function POST(request: Request) {
   const denied = await requireAdministrador();
   if (denied) return denied;
 
-  const body = await request.json().catch(() => null) as { correo?: string; perfil?: string; zona?: string } | null;
+  const body = await request.json().catch(() => null) as { correo?: string; perfil?: string; zonas?: unknown } | null;
   const validated = validateBody(body);
   if ('error' in validated) {
     return NextResponse.json({ error: validated.error }, { status: 400 });
@@ -76,18 +86,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Ya existe un usuario con ese correo' }, { status: 409 });
   }
 
-  // Funcionalidad "Números/Zonas múltiples": panel-users.ts ya guarda
-  // `zonas: string[]`, pero este endpoint (y user-manager.tsx, que todavía
-  // no se tocó — selector sigue siendo de una sola zona) sigue hablando
-  // `zona: string` de punta a punta por ahora. Se envuelve en un array de 0
-  // o 1 elementos al guardar — sin cambiar nada del comportamiento actual.
-  await setUser(validated.correo, validated.perfil, validated.zona ? [validated.zona] : []);
+  await setUser(validated.correo, validated.perfil, validated.zonas);
 
   await registrarAuditoria({
     accion: 'crear_usuario',
     objetoTipo: 'usuario',
     objetoId: validated.correo,
-    valorNuevo: `perfil: ${validated.perfil}; zona: ${validated.zona || '—'}`,
+    valorNuevo: `perfil: ${validated.perfil}; zonas: ${validated.zonas.join(', ')}`,
   });
 
   return NextResponse.json({ ok: true, user: validated });
@@ -97,7 +102,7 @@ export async function PUT(request: Request) {
   const denied = await requireAdministrador();
   if (denied) return denied;
 
-  const body = await request.json().catch(() => null) as { correo?: string; perfil?: string; zona?: string } | null;
+  const body = await request.json().catch(() => null) as { correo?: string; perfil?: string; zonas?: unknown } | null;
   const validated = validateBody(body);
   if ('error' in validated) {
     return NextResponse.json({ error: validated.error }, { status: 400 });
@@ -108,25 +113,23 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'No existe un usuario con ese correo' }, { status: 404 });
   }
 
-  await setUser(validated.correo, validated.perfil, validated.zona ? [validated.zona] : []);
+  await setUser(validated.correo, validated.perfil, validated.zonas);
 
-  // Mismo criterio de "un solo valor por ahora" que el comentario de POST —
-  // existing.zonas[0] es la única zona posible mientras este endpoint siga
-  // hablando zona: string.
-  const existingZona = existing.zonas[0] ?? '';
+  const existingZonas = existing.zonas.join(', ') || '—';
+  const nuevasZonas = validated.zonas.join(', ');
   const cambios: string[] = [];
   if ((existing.perfil || '') !== validated.perfil) {
     cambios.push(`perfil: ${existing.perfil || '—'} → ${validated.perfil}`);
   }
-  if (existingZona !== (validated.zona || '')) {
-    cambios.push(`zona: ${existingZona || '—'} → ${validated.zona || '—'}`);
+  if (existingZonas !== nuevasZonas) {
+    cambios.push(`zonas: ${existingZonas} → ${nuevasZonas}`);
   }
   await registrarAuditoria({
     accion: 'editar_usuario',
     objetoTipo: 'usuario',
     objetoId: validated.correo,
-    valorAnterior: `perfil: ${existing.perfil || '—'}; zona: ${existingZona || '—'}`,
-    valorNuevo: `perfil: ${validated.perfil}; zona: ${validated.zona || '—'}`,
+    valorAnterior: `perfil: ${existing.perfil || '—'}; zonas: ${existingZonas}`,
+    valorNuevo: `perfil: ${validated.perfil}; zonas: ${nuevasZonas}`,
     detalle: cambios.length > 0 ? cambios.join('; ') : 'sin cambios',
   });
 
@@ -154,7 +157,7 @@ export async function DELETE(request: Request) {
     accion: 'eliminar_usuario',
     objetoTipo: 'usuario',
     objetoId: correo,
-    valorAnterior: `perfil: ${existing.perfil || '—'}; zona: ${existing.zonas[0] || '—'}`,
+    valorAnterior: `perfil: ${existing.perfil || '—'}; zonas: ${existing.zonas.join(', ') || '—'}`,
     valorNuevo: null,
   });
 

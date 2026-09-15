@@ -14,8 +14,8 @@ import type { PanelUser } from '@/lib/panel-users';
 const ASSIGNABLE_ZONES = getAssignableZones();
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function emptyForm(): { correo: string; perfil: string; zona: string } {
-  return { correo: '', perfil: MOCK_ACCOUNT_PROFILES[0], zona: '' };
+function emptyForm(): { correo: string; perfil: string; zonas: string[] } {
+  return { correo: '', perfil: MOCK_ACCOUNT_PROFILES[0], zonas: [] };
 }
 
 /**
@@ -72,15 +72,19 @@ export function UserManager() {
 
   const openEditForm = (user: PanelUser) => {
     setEditingCorreo(user.correo);
-    // Funcionalidad "Números/Zonas múltiples": panel-users.ts ya guarda
-    // zonas: string[], pero este selector sigue siendo de una sola zona por
-    // ahora (el selector múltiple queda para cuando se toque la UI) — se
-    // toma la primera nada más, mismo comportamiento que antes para una
-    // cuenta que solo tenía una.
-    setForm({ correo: user.correo, perfil: user.perfil || MOCK_ACCOUNT_PROFILES[0], zona: user.zonas[0] ?? '' });
+    setForm({ correo: user.correo, perfil: user.perfil || MOCK_ACCOUNT_PROFILES[0], zonas: [...user.zonas] });
     setSubmitError(null);
     setSubmitSuccess(null);
     setShowForm(true);
+  };
+
+  const toggleZona = (zona: string) => {
+    setForm((current) => ({
+      ...current,
+      zonas: current.zonas.includes(zona)
+        ? current.zonas.filter((z) => z !== zona)
+        : [...current.zonas, zona],
+    }));
   };
 
   const closeForm = () => {
@@ -91,6 +95,15 @@ export function UserManager() {
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
+
+    // Funcionalidad "Números/Zonas múltiples": al menos una zona es
+    // obligatoria — mismo mínimo que ya exige el endpoint (ver validateBody
+    // en /api/usuarios/route.ts), chequeado acá antes para no ni siquiera
+    // hacer el fetch.
+    if (form.zonas.length === 0) {
+      setSubmitError('Tenés que marcar al menos un número.');
+      return;
+    }
 
     setSubmitting(true);
     setSubmitError(null);
@@ -103,7 +116,7 @@ export function UserManager() {
         body: JSON.stringify({
           correo: form.correo.trim(),
           perfil: form.perfil,
-          zona: form.zona,
+          zonas: form.zonas,
         }),
       });
 
@@ -215,7 +228,7 @@ export function UserManager() {
               >
                 {user.perfil || 'Sin asignar'}
               </Badge>
-              <span className="truncate text-xs text-muted-foreground">{user.zonas[0] || 'Sin asignar'}</span>
+              <span className="truncate text-xs text-muted-foreground">{user.zonas.length > 0 ? user.zonas.join(', ') : 'Sin asignar'}</span>
               <div className="flex items-center gap-1">
                 <Button
                   type="button"
@@ -279,18 +292,20 @@ export function UserManager() {
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="user-zona">Número</Label>
-              <select
-                id="user-zona"
-                value={form.zona}
-                onChange={(e) => setForm((current) => ({ ...current, zona: e.target.value }))}
-                className="h-10 w-full rounded-md border border-[var(--chat-border-strong)] bg-[var(--chat-input)] px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <option value="">Sin asignar</option>
+              <span className="text-sm font-medium leading-none">Números</span>
+              <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-md border border-[var(--chat-border-strong)] bg-[var(--chat-input)] px-3 py-2.5">
                 {ASSIGNABLE_ZONES.map((zone) => (
-                  <option key={zone} value={zone}>{zone}</option>
+                  <label key={zone} className="flex items-center gap-1.5 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.zonas.includes(zone)}
+                      onChange={() => toggleZona(zone)}
+                      className="size-4 rounded border-[var(--chat-border-strong)] accent-primary"
+                    />
+                    {zone}
+                  </label>
                 ))}
-              </select>
+              </div>
             </div>
           </div>
 
