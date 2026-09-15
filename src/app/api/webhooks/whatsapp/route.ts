@@ -4,6 +4,18 @@ import { emitInboxUpdate } from '@/lib/event-bus';
 import { getZone } from '@/lib/conversation-zones';
 import { threadKeyFor } from '@/lib/inbox-data';
 import { whatsappClient } from '@/lib/whatsapp-client';
+import { enforceRateLimit, getClientIp } from '@/lib/rate-limit';
+
+// Protege el endpoint de una saturación (accidental o maliciosa) sin
+// castigar el tráfico real de Kapso: un chat activo puede generar varios
+// eventos seguidos en poco tiempo (mensaje entrante + "enviado" →
+// "entregado" → "leído" por cada respuesta nuestra, multiplicado por todas
+// las conversaciones activas a la vez), así que el límite tiene que ser
+// generoso a propósito — esto es una barrera contra un flood/DoS, no un
+// control fino de tráfico normal. Por IP (ver limitación de
+// src/lib/rate-limit.ts sobre por qué esto no es una garantía dura).
+const WEBHOOK_RATE_LIMIT = 300;
+const WEBHOOK_RATE_WINDOW_MS = 60_000;
 
 // --- Si los mensajes tardan en aparecer (varios segundos, en vez
 // de instantáneo) ---
@@ -214,6 +226,14 @@ function verifySignature(
 
 export async function POST(request: Request) {
   try {
+    const limitado = enforceRateLimit(
+      `webhook:${getClientIp(request)}`,
+      WEBHOOK_RATE_LIMIT,
+      WEBHOOK_RATE_WINDOW_MS,
+      'Too many webhook requests'
+    );
+    if (limitado) return limitado;
+
     const rawBody = await request.text();
 
     const signature = request.headers.get('x-webhook-signature');

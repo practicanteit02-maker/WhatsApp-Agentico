@@ -1,10 +1,23 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/auth';
 import { configurationErrorResponse, resolvePhoneNumberContext } from '@/lib/inbox-settings';
 import { checkZoneAccess } from '@/lib/conversation-zones';
 import { threadKeyFor } from '@/lib/inbox-data';
 import { extractMensajeId, registrarRespuesta } from '@/lib/respuestas';
 import { whatsappClient } from '@/lib/whatsapp-client';
 import { requierePermiso } from '@/lib/require-permission';
+import { enforceRateLimit, getClientIp } from '@/lib/rate-limit';
+
+// Cada mensaje enviado le cuesta plata de verdad en la API de Kapso/Meta —
+// este límite es para frenar a una sola persona (o un ataque automatizado
+// con una sesión válida) mandando cientos de mensajes en poco tiempo, no
+// para el uso normal de un agente respondiendo chats. Por sesión (correo de
+// quien está logueado, con la IP como respaldo si por lo que sea no hay
+// correo) y no global, para que un agente ocupado no le coma el margen a los
+// demás. 30 cada 60s ya es generoso para un humano (medio mensaje cada dos
+// segundos, sostenido un minuto entero).
+const SEND_MESSAGE_RATE_LIMIT = 30;
+const SEND_MESSAGE_RATE_WINDOW_MS = 60_000;
 
 // Funcionalidad "Contactos con username (BSUID)": para un contacto que le
 // oculta su número al negocio (solo tiene username de WhatsApp — Kapso
@@ -46,6 +59,16 @@ export async function POST(request: Request) {
   try {
     const denegado = await requierePermiso('escribir');
     if (denegado) return denegado;
+
+    const session = await auth();
+    const rateLimitKey = session?.user?.email ?? getClientIp(request);
+    const limitado = enforceRateLimit(
+      `messages-send:${rateLimitKey}`,
+      SEND_MESSAGE_RATE_LIMIT,
+      SEND_MESSAGE_RATE_WINDOW_MS,
+      'Estás mandando mensajes demasiado rápido. Esperá un momento y volvé a intentar.'
+    );
+    if (limitado) return limitado;
 
     const formData = await request.formData();
     const to = formData.get('to') as string;
