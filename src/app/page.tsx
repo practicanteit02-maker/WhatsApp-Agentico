@@ -13,6 +13,15 @@ import {
 } from '@/lib/inbox-data';
 import { loadStarredMessages, toggleStarredMessage, type StarredMessage } from '@/lib/starred-messages';
 
+// Funcionalidad "Números/Zonas múltiples": referencia estable para cuando
+// session.user.zonas todavía no está disponible (sesión cargando, o correo
+// sin fila en "usuarios-panel") — un `[] as const` puesto directo en la
+// expresión de abajo sería una instancia nueva de array en cada render, y
+// ConversationList depende de que esta prop sea referencialmente estable
+// para no resincronizar su zona activa en cada uno de esos renders (ver el
+// comentario de primeraZonaAsignada ahí).
+const EMPTY_SESSION_ZONAS: string[] = [];
+
 export default function Home() {
   const [selectedThreadKey, setSelectedThreadKey] = useState<string>();
   // Funcionalidad "Mensajes destacados": lista de mensajes con estrella, de
@@ -40,11 +49,10 @@ export default function Home() {
   const { data: session, status } = useSession();
   const sessionLoading = status === 'loading';
   const sessionPerfil = session?.user?.perfil ?? 'Sin asignar';
-  // Funcionalidad "Números/Zonas múltiples": session.user.zonas ya es un
-  // array, pero ConversationList (UI, todavía no tocada) sigue esperando
-  // una sola zona por ahora — se toma la primera nada más, mismo
-  // comportamiento que antes para una cuenta con una sola zona asignada.
-  const sessionZona = session?.user?.zonas?.[0] ?? 'Sin asignar';
+  // Funcionalidad "Números/Zonas múltiples": el array completo, tal cual —
+  // ConversationList (paso 2 de esta funcionalidad) arma con esto su propio
+  // selector de zona activa cuando hay más de una asignada.
+  const sessionZonas = session?.user?.zonas ?? EMPTY_SESSION_ZONAS;
   // Funcionalidad "Nuevo chat": número recién ingresado en NewChatDialog,
   // todavía sin ninguna conversación real (ver handleOpenNewChat) — mientras
   // esto esté puesto, MessageView se abre con este número como destinatario
@@ -130,7 +138,7 @@ export default function Home() {
         starredMessages={starredMessages}
         onOpenStarredMessage={handleOpenStarredMessage}
         sessionPerfil={sessionPerfil}
-        sessionZona={sessionZona}
+        sessionZonas={sessionZonas}
         sessionLoading={sessionLoading}
         onOpenNewChat={handleOpenNewChat}
       />

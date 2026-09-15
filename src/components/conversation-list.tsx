@@ -275,7 +275,7 @@ type Props = {
   /** Clic en un mensaje del panel de destacados — abre ese chat y le pide a
    * MessageView que salte hasta ese mensaje puntual. */
   onOpenStarredMessage?: (thread: ConversationThread, messageId: string) => void;
-  /** Perfil y zona reales de la persona logueada, asignados desde la tabla
+  /** Perfil y zonas reales de la persona logueada, asignados desde la tabla
    * "usuarios-panel" de DynamoDB (ver src/auth.ts) — de solo lectura, nadie
    * los cambia desde acá. Viven en src/app/page.tsx (no acá) porque
    * MessageView también necesita el perfil, para mostrar el nombre del
@@ -283,14 +283,18 @@ type Props = {
    * message-view.tsx). "Sin asignar" es el valor cuando el correo de la
    * persona todavía no está cargado en esa tabla. */
   sessionPerfil?: string;
-  sessionZona?: string;
+  /** Funcionalidad "Números/Zonas múltiples": el array completo de zonas
+   * asignadas (nunca solo la primera) — con esto arma el selector de zona
+   * activa más abajo cuando hay más de una, mostrando siempre las zonas
+   * reales de esta persona y nunca ninguna otra. */
+  sessionZonas?: string[];
   /** true mientras src/app/page.tsx todavía no sabe si hay sesión (ver
-   * status de useSession() ahí) — sessionPerfil/sessionZona ya llegan como
-   * 'Sin asignar' en ese momento (mismo valor que un correo genuino sin
-   * fila en "usuarios-panel"), así que esta bandera es la única forma de
-   * distinguir "todavía no sé" de "ya sé que no tiene zona". La usa el
-   * efecto que sincroniza activeZone más abajo, para no fijarlo con ese
-   * valor transitorio antes de tiempo. */
+   * status de useSession() ahí) — sessionPerfil/sessionZonas ya llegan con
+   * sus valores "sin datos todavía" en ese momento (mismo valor que un
+   * correo genuino sin fila en "usuarios-panel"), así que esta bandera es la
+   * única forma de distinguir "todavía no sé" de "ya sé que no tiene zona".
+   * La usa el efecto que sincroniza activeZone más abajo, para no fijarlo
+   * con ese valor transitorio antes de tiempo. */
   sessionLoading?: boolean;
   /** Funcionalidad "Nuevo chat": se dispara al validar el número en
    * NewChatDialog — abre la vista de chat con ese número (ver
@@ -299,6 +303,12 @@ type Props = {
 };
 
 const EMPTY_STARRED_MESSAGES: StarredMessage[] = [];
+// Funcionalidad "Números/Zonas múltiples": mismo motivo que
+// EMPTY_STARRED_MESSAGES de arriba — una referencia estable para el valor
+// por defecto, así un padre que todavía no tiene zonas no dispara el efecto
+// de sincronización de activeZone de abajo en cada render (un `[]` literal
+// puesto directo en la desestructuración sería una instancia nueva cada vez).
+const EMPTY_SESSION_ZONAS: string[] = [];
 
 export function ConversationList({
   onSelectThread,
@@ -307,7 +317,7 @@ export function ConversationList({
   starredMessages = EMPTY_STARRED_MESSAGES,
   onOpenStarredMessage,
   sessionPerfil = 'Sin asignar',
-  sessionZona = 'Sin asignar',
+  sessionZonas = EMPTY_SESSION_ZONAS,
   sessionLoading = false,
   onOpenNewChat,
 }: Props) {
@@ -374,19 +384,33 @@ export function ConversationList({
   // llegó, no decide qué se puede ver.
   const [activeZone, setActiveZone] = useState<string>(MOCK_ZONE_OPTIONS[0]);
   const [isZoneMenuOpen, setIsZoneMenuOpen] = useState(false);
-  // Para cualquier perfil que no sea Administrador, el filtro de vista no
-  // tiene sentido con otra zona distinta a la propia (el servidor ya le
-  // manda solo los chats de su zona en /api/conversations) — se mantiene
-  // siempre fijo en su sessionZona, sin depender de una elección manual.
+  // Funcionalidad "Números/Zonas múltiples": primera zona asignada, o "Sin
+  // asignar" si no tiene ninguna — valor primitivo (no el array
+  // sessionZonas en sí) a propósito, para que el efecto de abajo lo compare
+  // por VALOR y no por referencia. sessionZonas puede llegar como una
+  // instancia nueva de array en cada render del padre (aunque su contenido
+  // no haya cambiado en absoluto); si el efecto dependiera del array
+  // directo, se dispararía en cada uno de esos renders y pisaría la zona que
+  // la persona eligió a mano en el selector de abajo.
+  const primeraZonaAsignada = sessionZonas[0] ?? 'Sin asignar';
+  // Para un perfil que no sea Administrador y tenga una sola zona (o
+  // ninguna), el filtro de vista no tiene sentido con otra distinta a esa
+  // (el servidor ya le manda solo los chats de su(s) zona(s) en
+  // /api/conversations) — se mantiene siempre fijo en su primera zona
+  // asignada, sin depender de una elección manual. Con más de una zona
+  // asignada, en cambio, sí puede elegir cuál mirar (ver el selector más
+  // abajo) — este efecto solo la inicializa/resincroniza cuando cambia de
+  // verdad la sesión (login/logout, o zonas asignadas distintas), nunca pisa
+  // una elección manual posterior mientras la sesión sigue siendo la misma.
   // Mientras la sesión todavía está cargando (sessionLoading) no se toca
-  // activeZone para nada: sessionPerfil llega como 'Sin asignar' en ese
-  // momento (mismo valor transitorio que un correo genuino sin zona), y
-  // fijar activeZone con eso antes de tiempo lo dejaba atascado ahí para
-  // siempre — este efecto solo vuelve a correr cuando sessionPerfil o
-  // sessionZona cambian de valor, y una vez la sesión real carga y
-  // sessionPerfil pasa a ser 'Administrador', antes no había ninguna rama
-  // que lo corrigiera de vuelta a "Todos mis números" (ver la rama de
-  // abajo, que sí lo hace).
+  // activeZone para nada: sessionPerfil/primeraZonaAsignada llegan con su
+  // valor "sin datos todavía" en ese momento (mismo valor transitorio que un
+  // correo genuino sin zona), y fijar activeZone con eso antes de tiempo lo
+  // dejaba atascado ahí para siempre — este efecto solo vuelve a correr
+  // cuando sessionPerfil o primeraZonaAsignada cambian de valor, y una vez
+  // la sesión real carga y sessionPerfil pasa a ser 'Administrador', antes
+  // no había ninguna rama que lo corrigiera de vuelta a "Todos mis números"
+  // (ver la rama de abajo, que sí lo hace).
   useEffect(() => {
     if (sessionLoading) return;
 
@@ -395,8 +419,8 @@ export function ConversationList({
       return;
     }
 
-    setActiveZone(sessionZona);
-  }, [sessionLoading, sessionPerfil, sessionZona]);
+    setActiveZone(primeraZonaAsignada);
+  }, [sessionLoading, sessionPerfil, primeraZonaAsignada]);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const zoneMenuRef = useRef<HTMLDivElement>(null);
   const overflowMenuRef = useRef<HTMLDivElement>(null);
@@ -1449,12 +1473,20 @@ export function ConversationList({
           </div>
         ) : (
           <div className="mb-3 flex items-center gap-2 pt-1">
-            {/* Funcionalidad "Números/Zonas": adelanto visual de un selector
-                para agrupar los números conectados (por ciudad, externos,
-                etc.) — igual que el menú de perfil, todavía no filtra ni
-                cambia nada real, solo marca cuál opción quedó elegida. Ocupa
-                el lugar donde antes iba el letrero fijo "WhatsApp". */}
-            {esAdministrador(sessionPerfil) ? (
+            {/* Funcionalidad "Números/Zonas": selector para agrupar los
+                números conectados (por ciudad, externos, etc.) — filtro de
+                VISTA manual nada más (ver el comentario de activeZone más
+                arriba), no decide qué se puede ver. Ocupa el lugar donde
+                antes iba el letrero fijo "WhatsApp".
+                Funcionalidad "Números/Zonas múltiples": Administrador sigue
+                viendo el menú con las zonas de prueba de siempre (puede
+                filtrar por cualquiera, ya ve todos los chats igual); para
+                cualquier otro perfil, el mismo menú aparece con SUS zonas
+                reales nada más (session.user.zonas) cuando tiene más de una
+                — nunca una zona a la que no tiene acceso. Con una sola zona
+                (o ninguna) no hay nada que elegir, así que se muestra el
+                pill fijo de siempre. */}
+            {esAdministrador(sessionPerfil) || sessionZonas.length > 1 ? (
               <div className="relative" ref={zoneMenuRef}>
                 <button
                   type="button"
@@ -1474,7 +1506,7 @@ export function ConversationList({
                     aria-label="Números"
                     className="absolute left-0 top-[calc(100%+0.25rem)] z-50 w-48 rounded-xl border border-[var(--chat-border-strong)] bg-popover p-1 text-sm text-popover-foreground shadow-lg"
                   >
-                    {MOCK_ZONE_OPTIONS.map((zone) => {
+                    {(esAdministrador(sessionPerfil) ? MOCK_ZONE_OPTIONS : sessionZonas).map((zone) => {
                       const isActive = zone === activeZone;
 
                       return (
@@ -1501,13 +1533,13 @@ export function ConversationList({
                 )}
               </div>
             ) : (
-              // Para cualquier perfil que no sea Administrador no hay nada
-              // que elegir (solo puede ver su propia zona de todas formas),
-              // así que en vez del menú desplegable se muestra un pill fijo,
-              // no interactivo, con el mismo estilo visual.
+              // Para un perfil que no sea Administrador con una sola zona
+              // asignada (o ninguna) no hay nada que elegir, así que en vez
+              // del menú desplegable se muestra un pill fijo, no
+              // interactivo, con el mismo estilo visual.
               <div className="flex h-8 items-center gap-1.5 rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-surface)] px-3 text-xs font-medium text-foreground">
                 <span className="size-2 flex-shrink-0 rounded-full bg-destructive" aria-hidden="true" />
-                <span className="max-w-28 truncate">{sessionZona}</span>
+                <span className="max-w-28 truncate">{primeraZonaAsignada}</span>
               </div>
             )}
 
@@ -1606,7 +1638,7 @@ export function ConversationList({
                         {sessionPerfil}
                       </span>
                     )}
-                    {sessionZona === 'Sin asignar' ? (
+                    {sessionZonas.length === 0 ? (
                       <span className="flex items-center gap-2 rounded-lg border border-[var(--chat-warning-border)] bg-[var(--chat-warning-background)] px-2 py-1.5 text-xs font-medium text-[var(--chat-warning-foreground)]">
                         <TriangleAlert className="size-3.5 flex-shrink-0" />
                         Número sin asignar
@@ -1614,7 +1646,12 @@ export function ConversationList({
                     ) : (
                       <span className="flex items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground">
                         <MapPin className="size-3.5 flex-shrink-0" />
-                        {sessionZona}
+                        {/* Funcionalidad "Números/Zonas múltiples": las
+                            zonas reales completas (no solo la primera) —
+                            este menú es de solo lectura, así que mostrarlas
+                            todas es estrictamente más información, sin
+                            ningún comportamiento que ajustar. */}
+                        {sessionZonas.join(', ')}
                       </span>
                     )}
                   </div>
