@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { getSystemPrompt } from '@/lib/system-prompt';
 
 // Usada por src/lib/auto-reply.ts para responder automáticamente a mensajes
 // de texto entrantes (disparado solo al abrir el chat — ver
@@ -43,6 +44,11 @@ export type ChatHistoryMessage = {
  */
 export async function generateAIResponse(history: ChatHistoryMessage[]): Promise<string> {
   const client = getAIClient();
+  // Funcionalidad "System prompt centralizado": ver src/lib/system-prompt.ts
+  // — el texto ya no vive acá como string literal, viene de la tabla
+  // "configuracion-ia" en DynamoDB (con caché en memoria y respaldo
+  // hardcodeado si la lectura falla), compartida con whatsapp-agente-lambda.
+  const systemPrompt = await getSystemPrompt();
 
   const response = await client.chat.completions.create({
     // Catálogo de Groq en console.groq.com/docs/models — cambia con el tiempo,
@@ -50,28 +56,7 @@ export async function generateAIResponse(history: ChatHistoryMessage[]): Promise
     // id vigente. 'openai/gpt-oss-20b' es una alternativa más rápida/liviana.
     model: 'openai/gpt-oss-120b',
     messages: [
-      {
-        role: 'system',
-        content:
-          'Eres un asistente de atención al cliente por WhatsApp. Responde en español, ' +
-          'de forma amable, clara y breve. No inventes información que no conozcas. ' +
-          // Restricción "solo temas de la empresa" — este texto debe ser IDÉNTICO
-          // al de INSTRUCCION_SISTEMA en whatsapp-agente-lambda/index.mjs (repo
-          // aparte), para que el bot se comporte igual sin importar cuál de los
-          // dos sistemas responda (ambos usan Groq). Si se edita acá, hay que
-          // editarlo a mano también del otro lado — no hay nada que los sincronice.
-          'Solo debes responder preguntas relacionadas con la empresa: sus productos ' +
-          'o servicios, pedidos, catálogo, precios, envíos, o soporte al cliente. Si ' +
-          'el cliente pregunta algo que no tiene relación con la empresa (temas ' +
-          'personales, opiniones generales u otros temas ajenos al negocio), ' +
-          'respóndele con amabilidad que solo puedes ayudarlo con temas ' +
-          'relacionados a la empresa, sin sonar cortante ni robótico. ' +
-          'A continuación verás el historial reciente de esta conversación (mensajes ' +
-          'del cliente y tus propias respuestas anteriores) — úsalo para entender el ' +
-          'contexto. No vuelvas a saludar ("Hola", "Buenos días", etc.) si la ' +
-          'conversación ya estaba en curso; solo saluda si de verdad es el primer ' +
-          'mensaje del historial.'
-      },
+      { role: 'system', content: systemPrompt },
       ...history.map((message) => ({ role: message.role, content: message.content }))
     ]
   });
