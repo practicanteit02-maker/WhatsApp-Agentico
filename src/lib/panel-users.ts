@@ -3,8 +3,8 @@ import { DynamoDBDocumentClient, DeleteCommand, GetCommand, PutCommand, ScanComm
 
 /**
  * Cuentas del panel — tabla "usuarios-panel" en DynamoDB (misma tabla que ya
- * usa src/auth.ts para leer perfil/zona al iniciar sesión), partición
- * `correo`, atributos `perfil` y `zona`. Este archivo es el lado de
+ * usa src/auth.ts para leer perfil/zonas al iniciar sesión), partición
+ * `correo`, atributos `perfil` y `zonas`. Este archivo es el lado de
  * escritura/listado completo (crear, editar, borrar, listar todos), que
  * auth.ts no necesita para su único uso (leer un correo puntual al hacer
  * login) — mismo patrón de cliente sin credenciales explícitas que el resto
@@ -20,8 +20,25 @@ const USUARIOS_TABLE = 'usuarios-panel';
 export type PanelUser = {
   correo: string;
   perfil: string;
-  zona: string;
+  zonas: string[];
 };
+
+/**
+ * Funcionalidad "Números/Zonas múltiples": normaliza el ítem crudo de
+ * DynamoDB a `zonas: string[]`, sin importar en qué formato haya quedado
+ * guardado — filas viejas (de antes de este cambio) tienen `zona: string`
+ * en vez de `zonas`, y las dos formas coexisten en la tabla sin problema: no
+ * hace falta ningún backfill, una fila vieja sin tocar sigue funcionando
+ * para siempre leída como `[zona]`. La próxima vez que alguien la edite
+ * desde la sección Usuarios (setUser), se reescribe ya en el formato nuevo.
+ */
+function normalizarZonas(item: Record<string, unknown> | undefined): string[] {
+  if (!item) return [];
+  if (Array.isArray(item.zonas)) {
+    return item.zonas.filter((z): z is string => typeof z === 'string' && z.length > 0);
+  }
+  return typeof item.zona === 'string' && item.zona ? [item.zona] : [];
+}
 
 export async function getUser(correo: string): Promise<PanelUser | undefined> {
   try {
@@ -32,7 +49,7 @@ export async function getUser(correo: string): Promise<PanelUser | undefined> {
     return {
       correo,
       perfil: typeof result.Item.perfil === 'string' ? result.Item.perfil : '',
-      zona: typeof result.Item.zona === 'string' ? result.Item.zona : '',
+      zonas: normalizarZonas(result.Item),
     };
   } catch (error) {
     console.error('No se pudo consultar "usuarios-panel" en DynamoDB:', error);
@@ -57,7 +74,7 @@ export async function getAllUsers(): Promise<PanelUser[]> {
           users.push({
             correo: item.correo,
             perfil: typeof item.perfil === 'string' ? item.perfil : '',
-            zona: typeof item.zona === 'string' ? item.zona : '',
+            zonas: normalizarZonas(item),
           });
         }
       }
@@ -69,9 +86,12 @@ export async function getAllUsers(): Promise<PanelUser[]> {
   return users.sort((a, b) => a.correo.localeCompare(b.correo));
 }
 
-export async function setUser(correo: string, perfil: string, zona: string): Promise<void> {
+/** Escribe siempre en el formato nuevo (`zonas`) — no vuelve a escribir el
+ * atributo viejo `zona` aunque la fila lo tuviera, así que cualquier cuenta
+ * editada desde acá queda migrada de una. */
+export async function setUser(correo: string, perfil: string, zonas: string[]): Promise<void> {
   await dynamoClient.send(
-    new PutCommand({ TableName: USUARIOS_TABLE, Item: { correo, perfil, zona } })
+    new PutCommand({ TableName: USUARIOS_TABLE, Item: { correo, perfil, zonas } })
   );
 }
 

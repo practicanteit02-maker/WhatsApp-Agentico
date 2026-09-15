@@ -72,7 +72,12 @@ export function UserManager() {
 
   const openEditForm = (user: PanelUser) => {
     setEditingCorreo(user.correo);
-    setForm({ correo: user.correo, perfil: user.perfil || MOCK_ACCOUNT_PROFILES[0], zona: user.zona || '' });
+    // Funcionalidad "Números/Zonas múltiples": panel-users.ts ya guarda
+    // zonas: string[], pero este selector sigue siendo de una sola zona por
+    // ahora (el selector múltiple queda para cuando se toque la UI) — se
+    // toma la primera nada más, mismo comportamiento que antes para una
+    // cuenta que solo tenía una.
+    setForm({ correo: user.correo, perfil: user.perfil || MOCK_ACCOUNT_PROFILES[0], zona: user.zonas[0] ?? '' });
     setSubmitError(null);
     setSubmitSuccess(null);
     setShowForm(true);
@@ -210,7 +215,7 @@ export function UserManager() {
               >
                 {user.perfil || 'Sin asignar'}
               </Badge>
-              <span className="truncate text-xs text-muted-foreground">{user.zona || 'Sin asignar'}</span>
+              <span className="truncate text-xs text-muted-foreground">{user.zonas[0] || 'Sin asignar'}</span>
               <div className="flex items-center gap-1">
                 <Button
                   type="button"

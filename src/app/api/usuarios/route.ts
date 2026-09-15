@@ -76,7 +76,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Ya existe un usuario con ese correo' }, { status: 409 });
   }
 
-  await setUser(validated.correo, validated.perfil, validated.zona);
+  // Funcionalidad "Números/Zonas múltiples": panel-users.ts ya guarda
+  // `zonas: string[]`, pero este endpoint (y user-manager.tsx, que todavía
+  // no se tocó — selector sigue siendo de una sola zona) sigue hablando
+  // `zona: string` de punta a punta por ahora. Se envuelve en un array de 0
+  // o 1 elementos al guardar — sin cambiar nada del comportamiento actual.
+  await setUser(validated.correo, validated.perfil, validated.zona ? [validated.zona] : []);
 
   await registrarAuditoria({
     accion: 'crear_usuario',
@@ -103,20 +108,24 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'No existe un usuario con ese correo' }, { status: 404 });
   }
 
-  await setUser(validated.correo, validated.perfil, validated.zona);
+  await setUser(validated.correo, validated.perfil, validated.zona ? [validated.zona] : []);
 
+  // Mismo criterio de "un solo valor por ahora" que el comentario de POST —
+  // existing.zonas[0] es la única zona posible mientras este endpoint siga
+  // hablando zona: string.
+  const existingZona = existing.zonas[0] ?? '';
   const cambios: string[] = [];
   if ((existing.perfil || '') !== validated.perfil) {
     cambios.push(`perfil: ${existing.perfil || '—'} → ${validated.perfil}`);
   }
-  if ((existing.zona || '') !== (validated.zona || '')) {
-    cambios.push(`zona: ${existing.zona || '—'} → ${validated.zona || '—'}`);
+  if (existingZona !== (validated.zona || '')) {
+    cambios.push(`zona: ${existingZona || '—'} → ${validated.zona || '—'}`);
   }
   await registrarAuditoria({
     accion: 'editar_usuario',
     objetoTipo: 'usuario',
     objetoId: validated.correo,
-    valorAnterior: `perfil: ${existing.perfil || '—'}; zona: ${existing.zona || '—'}`,
+    valorAnterior: `perfil: ${existing.perfil || '—'}; zona: ${existingZona || '—'}`,
     valorNuevo: `perfil: ${validated.perfil}; zona: ${validated.zona || '—'}`,
     detalle: cambios.length > 0 ? cambios.join('; ') : 'sin cambios',
   });
@@ -145,7 +154,7 @@ export async function DELETE(request: Request) {
     accion: 'eliminar_usuario',
     objetoTipo: 'usuario',
     objetoId: correo,
-    valorAnterior: `perfil: ${existing.perfil || '—'}; zona: ${existing.zona || '—'}`,
+    valorAnterior: `perfil: ${existing.perfil || '—'}; zona: ${existing.zonas[0] || '—'}`,
     valorNuevo: null,
   });
 

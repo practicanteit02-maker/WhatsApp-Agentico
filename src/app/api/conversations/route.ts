@@ -241,7 +241,11 @@ export async function GET(request: Request) {
       ? transformedData
       : await (async () => {
           const zones = await getAllZones();
-          const sessionZona = session?.user?.zona;
+          // Funcionalidad "Números/Zonas múltiples": sessionZonas vacío o
+          // undefined nunca deja pasar nada — mismo criterio "falla cerrado"
+          // que checkZoneAccess() en conversation-zones.ts, acá aplicado al
+          // filtro de la lista completa en vez de a un chat puntual.
+          const sessionZonas = session?.user?.zonas ?? [];
           return transformedData.filter((conversation) => {
             const threadKey = threadKeyFor(
               conversation.phoneNumberId,
@@ -249,7 +253,7 @@ export async function GET(request: Request) {
               conversation.id,
               conversation.businessScopedUserId
             );
-            return Boolean(sessionZona) && zones[threadKey] === sessionZona;
+            return sessionZonas.includes(zones[threadKey]);
           });
         })();
 

@@ -71,9 +71,22 @@ export type ZoneAccessResult =
  * Chequeo de acceso reutilizado por todos los endpoints que exponen o actúan
  * sobre un chat puntual (mensajes, envío, reacciones, botones, plantillas,
  * media): Administrador pasa siempre. Cualquier otro perfil solo pasa si la
- * zona real de ese chat coincide con su propia zona — sin sesión, sin zona
- * asignada todavía, o zona distinta, se niega. Nunca confía en nada que
- * mande el cliente sobre quién es: la sesión sale de `auth()`, server-side.
+ * zona real de ese chat está entre SUS zonas asignadas (ver Session.user.zonas
+ * en src/types/next-auth.d.ts) — sin sesión, sin ninguna zona asignada
+ * todavía, o zona real que no está en su lista, se niega. Nunca confía en
+ * nada que mande el cliente sobre quién es: la sesión sale de `auth()`,
+ * server-side.
+ *
+ * Funcionalidad "Números/Zonas múltiples": a propósito falla CERRADO —
+ * `session.user.zonas` vacío o undefined nunca da acceso a nada, ni siquiera
+ * por casualidad. Es lo opuesto al criterio del lock de respuesta de IA
+ * (ver adquirirLockRespuestaIA/acquireAiReplyLock, que ante una falla de
+ * infraestructura ajena prefiere DEJAR pasar) — acá el riesgo de fallar mal
+ * es exponer los chats de otra zona, no dejar de responder un mensaje, así
+ * que el criterio conservador va en la dirección contraria. `.includes()`
+ * sobre un array vacío ya da `false` sola (no hace falta ningún chequeo
+ * extra para eso), pero queda cubierto explícitamente por un test — ver
+ * conversation-zones.test.ts.
  */
 export async function checkZoneAccess(threadKey: string): Promise<ZoneAccessResult> {
   const session = await auth();
@@ -86,7 +99,7 @@ export async function checkZoneAccess(threadKey: string): Promise<ZoneAccessResu
   }
 
   const zona = await getZone(threadKey);
-  if (zona && zona === session.user.zona) {
+  if (zona && session.user.zonas?.includes(zona)) {
     return { allowed: true };
   }
 

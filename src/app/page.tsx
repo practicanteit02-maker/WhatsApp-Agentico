@@ -40,7 +40,11 @@ export default function Home() {
   const { data: session, status } = useSession();
   const sessionLoading = status === 'loading';
   const sessionPerfil = session?.user?.perfil ?? 'Sin asignar';
-  const sessionZona = session?.user?.zona ?? 'Sin asignar';
+  // Funcionalidad "Números/Zonas múltiples": session.user.zonas ya es un
+  // array, pero ConversationList (UI, todavía no tocada) sigue esperando
+  // una sola zona por ahora — se toma la primera nada más, mismo
+  // comportamiento que antes para una cuenta con una sola zona asignada.
+  const sessionZona = session?.user?.zonas?.[0] ?? 'Sin asignar';
   // Funcionalidad "Nuevo chat": número recién ingresado en NewChatDialog,
   // todavía sin ninguna conversación real (ver handleOpenNewChat) — mientras
   // esto esté puesto, MessageView se abre con este número como destinatario

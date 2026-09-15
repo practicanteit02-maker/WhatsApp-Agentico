@@ -34,11 +34,14 @@ export async function GET(request: Request) {
   // asignada, no recibe ninguno (falla cerrado).
   const session = await auth();
   const isAdmin = esAdministrador(session?.user?.perfil);
-  const sessionZona = session?.user?.zona;
+  // Funcionalidad "Números/Zonas múltiples": sessionZonas vacío o undefined
+  // nunca deja pasar nada — mismo criterio "falla cerrado" que
+  // checkZoneAccess() en conversation-zones.ts.
+  const sessionZonas = session?.user?.zonas ?? [];
 
   function isVisibleToThisConnection(zona: string | undefined): boolean {
     if (isAdmin) return true;
-    return Boolean(sessionZona) && zona === sessionZona;
+    return Boolean(zona) && sessionZonas.includes(zona as string);
   }
 
   let onUpdate: (payload: InboxUpdatePayload) => void;
