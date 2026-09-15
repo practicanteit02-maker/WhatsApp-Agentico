@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/auth';
 import * as chatCollab from '@/lib/chat-collab';
+import { requierePermiso } from '@/lib/require-permission';
 
 type CollabAction = 'typing' | 'attribute';
 
@@ -10,9 +12,13 @@ type CollabAction = 'typing' | 'attribute';
  * POST avisa "estoy escribiendo" o registra el remitente real de un
  * mensaje ya mandado, y lo transmite en vivo a quien esté escuchando por
  * SSE (ver src/app/api/events/route.ts). Puramente informativo — no
- * restringe quién puede mandar mensajes.
+ * restringe quién puede mandar mensajes, pero sigue exigiendo sesión (permiso
+ * "leer"/"escribir") como el resto de los endpoints.
  */
 export async function GET(request: Request) {
+  const denegado = await requierePermiso('leer');
+  if (denegado) return denegado;
+
   const { searchParams } = new URL(request.url);
   const threadKey = searchParams.get('threadKey');
   if (!threadKey) {
@@ -29,10 +35,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const denegado = await requierePermiso('escribir');
+  if (denegado) return denegado;
+
   const body = await request.json().catch(() => null) as {
     threadKey?: string;
     action?: CollabAction;
-    profile?: string;
     messageId?: string;
   } | null;
 
@@ -40,16 +48,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing threadKey or action' }, { status: 400 });
   }
 
-  const { threadKey, action, profile, messageId } = body;
+  const { threadKey, action, messageId } = body;
+
+  // Quién está escribiendo / quién mandó un mensaje sale SIEMPRE del rol de
+  // la sesión autenticada (session.user.perfil), nunca de un campo `profile`
+  // que mandara el cliente — antes ese campo viajaba libre en el body, así
+  // que cualquiera podía atribuirse mensajes ajenos o hacerse pasar por otro
+  // rol en el indicador de "está escribiendo". requierePermiso('escribir')
+  // ya garantizó arriba que hay sesión con un rol válido.
+  const session = await auth();
+  const profile = session?.user?.perfil;
+  if (!profile) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
 
   switch (action) {
     case 'typing':
-      if (!profile) return NextResponse.json({ error: 'Missing profile' }, { status: 400 });
       await chatCollab.setTyping(threadKey, profile);
       break;
     case 'attribute':
-      if (!profile || !messageId) {
-        return NextResponse.json({ error: 'Missing profile or messageId' }, { status: 400 });
+      if (!messageId) {
+        return NextResponse.json({ error: 'Missing messageId' }, { status: 400 });
       }
       await chatCollab.recordAttribution(threadKey, messageId, profile);
       break;
