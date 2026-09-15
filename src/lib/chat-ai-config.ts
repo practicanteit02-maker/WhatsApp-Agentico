@@ -81,10 +81,14 @@ export async function setAiEnabled(threadKey: string, aiEnabled: boolean): Promi
 // sabía del otro — claimMessageId (auto-reply.ts) solo protege contra
 // reintentos DENTRO de este mismo repo, no contra la Lambda.
 //
-// Vive en la MISMA tabla "conversaciones-ai-config" (fila aparte, prefijo
-// "lock#" sobre el threadKey, para no chocar con la fila {threadKey,
-// aiEnabled} de ese chat) a pedido explícito — ambos lados ya comparten esa
-// tabla y calculan el threadKey con el mismo formato (ver threadKeyFor() en
+// Vive en su propia tabla, "locks-respuesta-ia" (clave `threadKey`) — antes
+// vivía como fila aparte dentro de "conversaciones-ai-config" (prefijo
+// "lock#", para no chocar con la fila {threadKey, aiEnabled} de ese chat),
+// pero eso contaminaba el Scan completo que hace getAllAiEnabled() más
+// arriba con filas de lock transitorias; una tabla dedicada lo evita. El
+// prefijo "lock#" se mantuvo tal cual al mover esto (ya no hace falta en una
+// tabla propia, pero sacarlo no era parte de este cambio). Ambos lados
+// calculan el threadKey con el mismo formato (ver threadKeyFor() en
 // inbox-data.ts y construirThreadKey() en index.mjs del otro repo: bsuid con
 // prioridad si existe, si no el teléfono con solo dígitos, seguido de ":" +
 // phoneNumberId) — confirmado carácter por carácter antes de implementar esto.
@@ -97,6 +101,7 @@ export async function setAiEnabled(threadKey: string, aiEnabled: boolean): Promi
 // (epoch en milisegundos) contra la hora actual — así que aunque la fila del
 // lock quede viva más tiempo del esperado, deja de bloquear a nadie apenas
 // pasan los 30s.
+const AI_LOCKS_TABLE = 'locks-respuesta-ia';
 const AI_REPLY_LOCK_TTL_MS = 30_000;
 const AI_REPLY_LOCK_PREFIX = 'lock#';
 
@@ -113,7 +118,7 @@ export async function acquireAiReplyLock(threadKey: string): Promise<boolean> {
   try {
     await dynamoClient.send(
       new PutCommand({
-        TableName: AI_CONFIG_TABLE,
+        TableName: AI_LOCKS_TABLE,
         Item: {
           threadKey: `${AI_REPLY_LOCK_PREFIX}${threadKey}`,
           expiresAt: now + AI_REPLY_LOCK_TTL_MS,
@@ -142,7 +147,7 @@ export async function releaseAiReplyLock(threadKey: string): Promise<void> {
   try {
     await dynamoClient.send(
       new DeleteCommand({
-        TableName: AI_CONFIG_TABLE,
+        TableName: AI_LOCKS_TABLE,
         Key: { threadKey: `${AI_REPLY_LOCK_PREFIX}${threadKey}` },
       })
     );
