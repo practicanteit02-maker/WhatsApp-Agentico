@@ -598,6 +598,16 @@ export function ConversationList({
     refetchOnWindowFocus: false,
   });
 
+  /** Funcionalidad "Etiquetar Perfiles" — autocompletar: etiquetas únicas ya
+   * usadas en algún chat, para sugerirlas en el input de abajo vía
+   * <datalist> (mismo patrón que ya usa template-manager.tsx para el campo
+   * de idioma) — sin pedir nada nuevo al backend, tagMap ya trae todo el
+   * historial de etiquetas usadas (ver fetchConversationTags arriba). */
+  const etiquetasConocidas = useMemo(
+    () => Array.from(new Set(Object.values(tagMap))).sort(),
+    [tagMap],
+  );
+
   const [tagEditorThreadKey, setTagEditorThreadKey] = useState<string | null>(null);
   const [tagEditorPosition, setTagEditorPosition] = useState<{ top: number; right: number } | null>(null);
   // Borrador del campo de texto mientras el editor de etiqueta está abierto
@@ -2339,6 +2349,7 @@ export function ConversationList({
                             <input
                               autoFocus
                               type="text"
+                              list="etiquetas-conocidas"
                               value={tagInputValue}
                               maxLength={40}
                               onClick={(e) => e.stopPropagation()}
@@ -2352,6 +2363,15 @@ export function ConversationList({
                               placeholder="Escribe una etiqueta..."
                               className="h-8 w-full rounded border border-[var(--chat-border-strong)] bg-[var(--chat-input)] px-2 text-xs text-foreground outline-none focus:border-primary"
                             />
+                            {/* Autocompletar nativo del navegador (ver
+                                etiquetasConocidas más arriba) — mismo patrón
+                                que el <datalist> de idioma en
+                                template-manager.tsx: sin filtrado manual, lo
+                                hace el propio navegador contra las opciones
+                                de acá abajo. */}
+                            <datalist id="etiquetas-conocidas">
+                              {etiquetasConocidas.map((et) => <option key={et} value={et} />)}
+                            </datalist>
                             <button
                               type="button"
                               onClick={(e) => {
