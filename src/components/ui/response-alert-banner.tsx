@@ -15,7 +15,7 @@ export type ResponseAlertBannerItem = {
   /** threadKey del chat — un banner por CONVERSACIÓN en alerta, no por
    * aparición: mientras el chat siga en alerta, es el mismo banner (fijo, no
    * se re-anima ni vuelve a sonar); si vuelve a alertar más adelante (ya
-   * respondido y sin respuesta de nuevo por otros 15min), ahí sí es una
+   * respondido y sin respuesta de nuevo por otros 5min), ahí sí es una
    * instancia nueva. */
   threadKey: string;
   contactName: string;
@@ -39,7 +39,7 @@ type ResponseAlertBannerStackProps = {
 
 /**
  * Pila de banners rojos que se apila arriba de la lista de conversaciones,
- * uno por cada chat que está en alerta (más de 15 minutos sin respuesta) —
+ * uno por cada chat que está en alerta (más de 5 minutos sin respuesta) —
  * no reemplaza el contador de la pestaña "En alerta" ni el borde rojo de
  * cada fila (esos siguen viviendo en conversation-list.tsx tal cual estaban),
  * es un aviso adicional. Cada banner es independiente: se queda fijo
@@ -146,7 +146,7 @@ function ResponseAlertBanner({ banner, onDone }: ResponseAlertBannerProps) {
           <Clock className="mt-0.5 size-4 shrink-0 text-destructive" />
           <div className="min-w-0">
             <p className="text-sm font-medium text-destructive">
-              {banner.contactName} lleva más de 15 min sin respuesta
+              {banner.contactName} lleva más de 5 min sin respuesta
             </p>
             {banner.zona && <p className="text-xs text-muted-foreground">{banner.zona}</p>}
           </div>

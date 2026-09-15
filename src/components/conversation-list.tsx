@@ -221,7 +221,7 @@ function isThreadMarkedUnread(
 /** Funcionalidad "Alerta de tiempo de respuesta": un chat lleva más de este
  * umbral sin que un agente le responda al cliente, se marca como "en
  * alerta" (ver isThreadInAlert). */
-const RESPONSE_ALERT_THRESHOLD_MS = 15 * 60 * 1000;
+const RESPONSE_ALERT_THRESHOLD_MS = 5 * 60 * 1000;
 
 /**
  * ¿Este chat lleva más de RESPONSE_ALERT_THRESHOLD_MS sin respuesta? Se
@@ -326,7 +326,7 @@ export function ConversationList({
   // combinación inválida "No leídos" + "En alerta" a la vez.
   const [listFilter, setListFilter] = useState<'todos' | 'no-leidos' | 'alerta'>('todos');
 
-  /** Funcionalidad "Alerta de tiempo de respuesta": los 15 minutos son
+  /** Funcionalidad "Alerta de tiempo de respuesta": los 5 minutos son
    * relativos al reloj actual, así que un chat puede cruzar el umbral entre
    * dos refetches de la lista sin que ningún dato haya cambiado (ver
    * isThreadInAlert más arriba). Este tick NO hace ninguna llamada de red —
@@ -755,7 +755,7 @@ export function ConversationList({
 
   /** Funcionalidad "Alerta de tiempo de respuesta": cuántos chats de la
    * bandeja normal (nunca los archivados — un chat archivado ya se dio por
-   * cerrado) llevan más de 15 minutos sin respuesta. Alimenta tanto el
+   * cerrado) llevan más de 5 minutos sin respuesta. Alimenta tanto el
    * número de la pestaña "En alerta" como, indirectamente, la marca en cada
    * tarjeta (misma condición, ver isThreadInAlert). */
   const alertCount = useMemo(
@@ -1652,7 +1652,7 @@ export function ConversationList({
               filtro `listFilter` (estado más arriba en este mismo archivo, y
               usado en el filtro `filteredThreads` unas líneas abajo del
               estado). "En alerta" es la funcionalidad "Alerta de tiempo de
-              respuesta": chats de la bandeja normal con más de 15 minutos
+              respuesta": chats de la bandeja normal con más de 5 minutos
               sin respuesta (ver isThreadInAlert e alertCount más arriba) —
               usa --destructive, no --primary, para no confundirse
               visualmente con el rojo de marca que ya usa "No leídos" y el
